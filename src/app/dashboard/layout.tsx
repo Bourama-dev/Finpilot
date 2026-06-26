@@ -11,6 +11,7 @@ const navItems = [
   { href: "/dashboard/transactions", label: "Transactions", icon: "💰" },
   { href: "/dashboard/documents", label: "Documents", icon: "📄" },
   { href: "/dashboard/budgets", label: "Budgets", icon: "🎯" },
+  { href: "/dashboard/forecast", label: "Prévisionnel", icon: "🔮" },
   { href: "/dashboard/reports", label: "Rapports", icon: "📊" },
   { href: "/dashboard/settings", label: "Paramètres", icon: "⚙️" },
 ];
