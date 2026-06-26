@@ -83,7 +83,22 @@ type GoalRow = {
   created_at: string;
 };
 
-export type { ProfileRow, TransactionRow, CategoryRow, DocumentRow, BudgetRow, GoalRow };
+type ReceivableRow = {
+  id: string;
+  user_id: string;
+  activity: Activity;
+  client: string;
+  invoice_ref: string | null;
+  amount: number;
+  currency: string;
+  status: "to_invoice" | "invoiced" | "paid";
+  service_date: string | null;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type { ProfileRow, TransactionRow, CategoryRow, DocumentRow, BudgetRow, GoalRow, ReceivableRow };
 
 export type Database = {
   public: {
@@ -140,6 +155,18 @@ export type Database = {
         Update: Partial<Omit<GoalRow, "id" | "user_id" | "created_at">>;
         Relationships: [
           { foreignKeyName: "goals_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
+        ];
+      };
+      receivables: {
+        Row: ReceivableRow;
+        Insert: Omit<ReceivableRow, "id" | "created_at" | "updated_at" | "invoice_ref" | "service_date" | "description"> & {
+          invoice_ref?: string | null;
+          service_date?: string | null;
+          description?: string | null;
+        };
+        Update: Partial<Omit<ReceivableRow, "id" | "user_id" | "created_at" | "updated_at">>;
+        Relationships: [
+          { foreignKeyName: "receivables_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
         ];
       };
     };
