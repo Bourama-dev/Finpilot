@@ -21,7 +21,7 @@ exception when duplicate_object then null; end $$;
 -- Profiles
 create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
-  email text not null,
+  email text,
   full_name text,
   avatar_url text,
   currency text not null default 'EUR',
