@@ -40,6 +40,15 @@ type HistTx = {
   date: string;
 };
 
+type Receivable = {
+  id: string;
+  client: string;
+  amount: number;
+  status: "to_invoice" | "invoiced";
+  activity: string;
+  service_date: string | null;
+};
+
 const fmt = (n: number) =>
   new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR", maximumFractionDigits: 0 }).format(n);
 
@@ -55,10 +64,32 @@ function monthlyEquivalent(tx: RecurringTx, target: Date): number {
   }
 }
 
+function expectedPaymentMonth(r: Receivable): Date {
+  const now = new Date();
+  const nextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+  if (r.status === "invoiced") {
+    // Already invoiced: expect payment next month
+    return nextMonth;
+  }
+
+  // to_invoice: service done but not yet invoiced → invoice + 1 month for payment
+  if (r.service_date) {
+    const sd = new Date(r.service_date);
+    // Add 2 months from service date (1 month to invoice, 1 month to pay)
+    const expected = new Date(sd.getFullYear(), sd.getMonth() + 2, 1);
+    // If already past, push to next month
+    return expected <= now ? nextMonth : expected;
+  }
+
+  return nextMonth;
+}
+
 export default function ForecastPage() {
   const [horizon, setHorizon] = useState(6);
   const [recurring, setRecurring] = useState<RecurringTx[]>([]);
   const [historical, setHistorical] = useState<HistTx[]>([]);
+  const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [loading, setLoading] = useState(true);
   const [includeHistory, setIncludeHistory] = useState(true);
   const [activeTab, setActiveTab] = useState<"chart" | "table">("chart");
@@ -68,7 +99,7 @@ export default function ForecastPage() {
       const threeMonthsAgo = new Date();
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
 
-      const [{ data: rec }, { data: hist }] = await Promise.all([
+      const [{ data: rec }, { data: hist }, { data: recvData }] = await Promise.all([
         supabase
           .from("transactions")
           .select("id, type, amount, category, description, activity, date, recurring_frequency")
@@ -78,15 +109,20 @@ export default function ForecastPage() {
           .select("type, amount, date")
           .eq("is_recurring", false)
           .gte("date", threeMonthsAgo.toISOString().slice(0, 10)),
+        supabase
+          .from("receivables")
+          .select("id, client, amount, status, activity, service_date")
+          .in("status", ["to_invoice", "invoiced"]),
       ]);
-      if (rec)  setRecurring(rec as RecurringTx[]);
-      if (hist) setHistorical(hist as HistTx[]);
+      if (rec)      setRecurring(rec as RecurringTx[]);
+      if (hist)     setHistorical(hist as HistTx[]);
+      if (recvData) setReceivables(recvData as Receivable[]);
       setLoading(false);
     }
     load();
   }, []);
 
-  const { months, totals, avgHistIncome, avgHistExpense } = useMemo(() => {
+  const { months, totals, avgHistIncome, avgHistExpense, receivablesByMonthKey } = useMemo(() => {
     const now = new Date();
 
     const histIncome  = historical.filter(t => t.type === "income" ).reduce((s, t) => s + t.amount, 0);
@@ -94,21 +130,34 @@ export default function ForecastPage() {
     const avgHistIncome  = histIncome  / 3;
     const avgHistExpense = histExpense / 3;
 
+    // Build a map: "YYYY-MM" → total receivable amount expected that month
+    const receivablesByMonthKey = new Map<string, Receivable[]>();
+    receivables.forEach(r => {
+      const payDate = expectedPaymentMonth(r);
+      const key = `${payDate.getFullYear()}-${String(payDate.getMonth() + 1).padStart(2, "0")}`;
+      if (!receivablesByMonthKey.has(key)) receivablesByMonthKey.set(key, []);
+      receivablesByMonthKey.get(key)!.push(r);
+    });
+
     let cumulative = 0;
 
     const months = Array.from({ length: horizon }, (_, i) => {
       const date = new Date(now.getFullYear(), now.getMonth() + i + 1, 1);
       const label = date.toLocaleDateString("fr-FR", { month: "short", year: "2-digit" });
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
 
       const recurIncome  = recurring.filter(t => t.type === "income" ).reduce((s, t) => s + monthlyEquivalent(t, date), 0);
       const recurExpense = recurring.filter(t => t.type === "expense").reduce((s, t) => s + monthlyEquivalent(t, date), 0);
 
-      const income  = recurIncome  + (includeHistory ? avgHistIncome  : 0);
+      const monthReceivables = receivablesByMonthKey.get(monthKey) ?? [];
+      const receivableIncome = monthReceivables.reduce((s, r) => s + r.amount, 0);
+
+      const income  = recurIncome  + (includeHistory ? avgHistIncome  : 0) + receivableIncome;
       const expense = recurExpense + (includeHistory ? avgHistExpense : 0);
       const net     = income - expense;
       cumulative   += net;
 
-      return { label, date, income, expense, net, cumulative, recurIncome, recurExpense };
+      return { label, date, monthKey, income, expense, net, cumulative, recurIncome, recurExpense, receivableIncome, monthReceivables };
     });
 
     const totalIncome  = months.reduce((s, m) => s + m.income,  0);
@@ -119,14 +168,17 @@ export default function ForecastPage() {
       totals: { income: totalIncome, expense: totalExpense, net: totalIncome - totalExpense },
       avgHistIncome,
       avgHistExpense,
+      receivablesByMonthKey,
     };
-  }, [recurring, historical, horizon, includeHistory]);
+  }, [recurring, historical, receivables, horizon, includeHistory]);
 
   const maxBar = Math.max(...months.map(m => Math.max(m.income, m.expense)), 1);
   const maxCum = Math.max(...months.map(m => Math.abs(m.cumulative)), 1);
 
   const incomeRecurring  = recurring.filter(t => t.type === "income");
   const expenseRecurring = recurring.filter(t => t.type === "expense");
+
+  const totalReceivableInForecast = months.reduce((s, m) => s + m.receivableIncome, 0);
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
@@ -158,7 +210,7 @@ export default function ForecastPage() {
         <div className="py-20 text-center">
           <p className="text-sm animate-pulse" style={{ color: "var(--text-muted)" }}>Calcul des projections…</p>
         </div>
-      ) : recurring.length === 0 && !includeHistory ? (
+      ) : recurring.length === 0 && !includeHistory && receivables.length === 0 ? (
         <div className="rounded-xl py-16 text-center space-y-3" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
           <div className="text-4xl">🔮</div>
           <p className="font-semibold" style={{ color: "var(--text-primary)" }}>Aucune donnée de projection</p>
@@ -174,11 +226,12 @@ export default function ForecastPage() {
       ) : (
         <>
           {/* KPIs */}
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
             {[
-              { label: "Revenus prévus",  value: totals.income,  color: "var(--success)" },
+              { label: "Revenus prévus",   value: totals.income,  color: "var(--success)" },
               { label: "Dépenses prévues", value: totals.expense, color: "var(--danger)"  },
               { label: "Épargne nette",    value: totals.net,     color: totals.net >= 0 ? "var(--success)" : "var(--danger)" },
+              { label: "Créances incluses", value: totalReceivableInForecast, color: "#f59e0b" },
             ].map(({ label, value, color }) => (
               <div key={label} className="rounded-xl p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
                 <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{label}</p>
@@ -227,12 +280,15 @@ export default function ForecastPage() {
                       <div className="w-full flex gap-0.5 items-end" style={{ height: 130 }}>
                         <div className="flex-1 rounded-t transition-all"
                           style={{ height: `${Math.max((m.income / maxBar) * 100, m.income > 0 ? 1 : 0)}%`, backgroundColor: "var(--success)", opacity: 0.75 }}
-                          title={`Revenus: ${fmt(m.income)}`} />
+                          title={`Revenus: ${fmt(m.income)}${m.receivableIncome > 0 ? ` (dont ${fmt(m.receivableIncome)} créances)` : ""}`} />
                         <div className="flex-1 rounded-t transition-all"
                           style={{ height: `${Math.max((m.expense / maxBar) * 100, m.expense > 0 ? 1 : 0)}%`, backgroundColor: "var(--danger)", opacity: 0.75 }}
                           title={`Dépenses: ${fmt(m.expense)}`} />
                       </div>
                       <span className="text-[10px] whitespace-nowrap overflow-hidden" style={{ color: "var(--text-muted)" }}>{m.label}</span>
+                      {m.receivableIncome > 0 && (
+                        <span className="text-[9px]" style={{ color: "#f59e0b" }}>📬</span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -242,6 +298,11 @@ export default function ForecastPage() {
                       <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: c as string, opacity: 0.75 }} />{l}
                     </span>
                   ))}
+                  {totalReceivableInForecast > 0 && (
+                    <span className="flex items-center gap-1.5 text-xs" style={{ color: "var(--text-muted)" }}>
+                      <span>📬</span> Mois avec créances
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -279,7 +340,7 @@ export default function ForecastPage() {
               <table className="w-full text-sm">
                 <thead>
                   <tr style={{ borderBottom: "1px solid var(--border)" }}>
-                    {["Mois", "Revenus", "Dépenses", "Net", "Cumulé"].map(h => (
+                    {["Mois", "Revenus", "dont créances", "Dépenses", "Net", "Cumulé"].map(h => (
                       <th key={h} className="px-4 py-3 text-left text-xs font-semibold" style={{ color: "var(--text-muted)" }}>{h}</th>
                     ))}
                   </tr>
@@ -289,6 +350,9 @@ export default function ForecastPage() {
                     <tr key={i} style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}>
                       <td className="px-4 py-3 font-medium text-xs" style={{ color: "var(--text-primary)" }}>{m.label}</td>
                       <td className="px-4 py-3 tabular-nums text-xs font-medium" style={{ color: "var(--success)", fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(m.income)}</td>
+                      <td className="px-4 py-3 tabular-nums text-xs" style={{ color: m.receivableIncome > 0 ? "#f59e0b" : "var(--text-muted)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                        {m.receivableIncome > 0 ? fmt(m.receivableIncome) : "—"}
+                      </td>
                       <td className="px-4 py-3 tabular-nums text-xs font-medium" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(m.expense)}</td>
                       <td className="px-4 py-3 tabular-nums text-xs font-semibold" style={{ color: m.net >= 0 ? "var(--success)" : "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
                         {m.net >= 0 ? "+" : ""}{fmt(m.net)}
@@ -303,6 +367,7 @@ export default function ForecastPage() {
                   <tr style={{ borderTop: "2px solid var(--border)", backgroundColor: "var(--bg-tertiary)" }}>
                     <td className="px-4 py-3 text-xs font-bold" style={{ color: "var(--text-primary)" }}>Total {horizon} mois</td>
                     <td className="px-4 py-3 tabular-nums text-xs font-bold" style={{ color: "var(--success)", fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(totals.income)}</td>
+                    <td className="px-4 py-3 tabular-nums text-xs font-bold" style={{ color: "#f59e0b", fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(totalReceivableInForecast)}</td>
                     <td className="px-4 py-3 tabular-nums text-xs font-bold" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(totals.expense)}</td>
                     <td className="px-4 py-3 tabular-nums text-xs font-bold" style={{ color: totals.net >= 0 ? "var(--success)" : "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
                       {totals.net >= 0 ? "+" : ""}{fmt(totals.net)}
@@ -311,6 +376,45 @@ export default function ForecastPage() {
                   </tr>
                 </tfoot>
               </table>
+            </div>
+          )}
+
+          {/* Receivables in forecast */}
+          {receivables.length > 0 && (
+            <div className="rounded-xl overflow-hidden" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+              <div className="px-4 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid var(--border)" }}>
+                <h3 className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>📬 Créances à recevoir</h3>
+                <span className="text-xs font-bold tabular-nums" style={{ color: "#f59e0b", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                  {fmt(receivables.reduce((s, r) => s + r.amount, 0))}
+                </span>
+              </div>
+              <ul>
+                {receivables.map((r, i) => {
+                  const act = ACTIVITIES[r.activity];
+                  const payDate = expectedPaymentMonth(r);
+                  const payLabel = payDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+                  return (
+                    <li key={r.id} className="flex items-center gap-3 px-4 py-3"
+                      style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}>
+                      <div className="w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0"
+                        style={{ backgroundColor: `${act?.color ?? "#888"}1a` }}>
+                        {act?.emoji ?? "💶"}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-xs font-medium truncate" style={{ color: "var(--text-primary)" }}>{r.client}</p>
+                        <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>
+                          Paiement prévu : {payLabel}
+                          {r.status === "invoiced" ? " · Facturée" : " · À facturer"}
+                        </p>
+                      </div>
+                      <span className="text-xs font-bold tabular-nums shrink-0"
+                        style={{ color: "#f59e0b", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                        {fmt(r.amount)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
             </div>
           )}
 
