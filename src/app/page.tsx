@@ -3,10 +3,10 @@ import Link from "next/link";
 export default function HomePage() {
   return (
     <main
-      className="flex min-h-screen flex-col items-center justify-center p-8"
+      className="flex min-h-screen flex-col items-center justify-center p-4 sm:p-8"
       style={{ backgroundColor: "var(--bg-primary)" }}
     >
-      <div className="text-center space-y-8 max-w-2xl w-full">
+      <div className="text-center space-y-6 sm:space-y-8 max-w-2xl w-full">
 
         {/* Badge */}
         <div
@@ -25,15 +25,15 @@ export default function HomePage() {
         </div>
 
         {/* Titre */}
-        <div className="space-y-3">
+        <div className="space-y-2 sm:space-y-3">
           <h1
-            className="text-5xl font-bold tracking-tight leading-tight"
+            className="text-3xl sm:text-5xl font-bold tracking-tight leading-tight"
             style={{ color: "var(--text-primary)", fontFamily: "var(--font-jakarta)" }}
           >
             Pilotez vos finances
           </h1>
           <h1
-            className="text-5xl font-bold tracking-tight leading-tight"
+            className="text-3xl sm:text-5xl font-bold tracking-tight leading-tight"
             style={{ color: "var(--accent)", fontFamily: "var(--font-jakarta)" }}
           >
             avec clarté
@@ -42,7 +42,7 @@ export default function HomePage() {
 
         {/* Description */}
         <p
-          className="text-lg max-w-md mx-auto leading-relaxed"
+          className="text-base sm:text-lg max-w-md mx-auto leading-relaxed"
           style={{ color: "var(--text-secondary)" }}
         >
           Gérez Alternance, CléAvenir, Hakily et vos finances personnelles
@@ -50,17 +50,17 @@ export default function HomePage() {
         </p>
 
         {/* CTA */}
-        <div className="flex gap-4 justify-center flex-wrap">
+        <div className="flex flex-col sm:flex-row gap-3 justify-center items-center">
           <Link
-            href="/auth/login"
-            className="px-6 py-3 rounded-xl text-white font-semibold transition-all hover:opacity-90 hover:shadow-lg"
+            href="/auth/register"
+            className="w-full sm:w-auto px-6 py-3 rounded-xl text-white font-semibold transition-all hover:opacity-90 hover:shadow-lg text-center"
             style={{ backgroundColor: "var(--accent)" }}
           >
-            Commencer →
+            Créer un compte →
           </Link>
           <Link
-            href="/dashboard"
-            className="px-6 py-3 rounded-xl font-medium transition-all hover:opacity-80"
+            href="/auth/login"
+            className="w-full sm:w-auto px-6 py-3 rounded-xl font-medium transition-all hover:opacity-80 text-center"
             style={{
               backgroundColor: "var(--bg-secondary)",
               color: "var(--text-primary)",
@@ -68,12 +68,12 @@ export default function HomePage() {
               boxShadow: "var(--shadow)",
             }}
           >
-            Dashboard
+            Se connecter
           </Link>
         </div>
 
         {/* Feature cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
           {[
             { emoji: "🎓", label: "Alternance", color: "#6366f1" },
             { emoji: "🏢", label: "CléAvenir",  color: "#f59e0b" },
@@ -82,7 +82,7 @@ export default function HomePage() {
           ].map(({ emoji, label, color }) => (
             <div
               key={label}
-              className="flex flex-col items-center gap-2 p-4 rounded-xl"
+              className="flex flex-col items-center gap-2 p-3 sm:p-4 rounded-xl"
               style={{
                 backgroundColor: "var(--bg-secondary)",
                 border: "1px solid var(--border)",
@@ -108,6 +108,14 @@ export default function HomePage() {
             </div>
           ))}
         </div>
+
+        {/* Footer link */}
+        <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+          Déjà un compte ?{" "}
+          <Link href="/auth/login" style={{ color: "var(--accent)" }}>
+            Se connecter
+          </Link>
+        </p>
 
       </div>
     </main>

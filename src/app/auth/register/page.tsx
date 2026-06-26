@@ -12,7 +12,8 @@ const inputStyle = {
   color: "var(--text-primary)",
 };
 
-export default function LoginPage() {
+export default function RegisterPage() {
+  const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -24,7 +25,10 @@ export default function LoginPage() {
     setError(null);
     const { error } = await supabase.auth.signInWithOtp({
       email,
-      options: { emailRedirectTo: `${location.origin}/auth/callback` },
+      options: {
+        emailRedirectTo: `${location.origin}/auth/callback`,
+        data: { full_name: fullName },
+      },
     });
     if (error) setError(error.message);
     else setSent(true);
@@ -57,7 +61,7 @@ export default function LoginPage() {
             FinPilot
           </h1>
           <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-            Connectez-vous à votre espace financier
+            Créez votre compte gratuitement
           </p>
         </div>
 
@@ -73,7 +77,7 @@ export default function LoginPage() {
               ✓ Lien envoyé !
             </p>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              Vérifiez <strong>{email}</strong>
+              Vérifiez <strong>{email}</strong> pour activer votre compte.
             </p>
           </div>
         ) : (
@@ -86,7 +90,7 @@ export default function LoginPage() {
             }}
           >
             <h2 className="text-base font-semibold text-center" style={{ color: "var(--text-primary)" }}>
-              Connexion
+              Créer un compte
             </h2>
 
             {error && (
@@ -96,6 +100,17 @@ export default function LoginPage() {
             )}
 
             <form onSubmit={handleMagicLink} className="space-y-3">
+              <input
+                type="text"
+                placeholder="Prénom et nom"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                required
+                className="w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
+                style={inputStyle}
+                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
+                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+              />
               <input
                 type="email"
                 placeholder="votre@email.com"
@@ -113,7 +128,7 @@ export default function LoginPage() {
                 className="w-full py-2.5 rounded-lg text-white font-semibold text-sm transition-opacity disabled:opacity-50"
                 style={{ backgroundColor: "var(--accent)" }}
               >
-                {loading ? "Envoi…" : "Envoyer le lien magique"}
+                {loading ? "Envoi…" : "Créer mon compte →"}
               </button>
             </form>
 
@@ -142,9 +157,9 @@ export default function LoginPage() {
             </button>
 
             <p className="text-center text-xs" style={{ color: "var(--text-muted)" }}>
-              Pas encore de compte ?{" "}
-              <Link href="/auth/register" style={{ color: "var(--accent)" }}>
-                S&apos;inscrire gratuitement
+              Déjà un compte ?{" "}
+              <Link href="/auth/login" style={{ color: "var(--accent)" }}>
+                Se connecter
               </Link>
             </p>
           </div>

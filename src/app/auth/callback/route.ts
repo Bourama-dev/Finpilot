@@ -7,10 +7,20 @@ export async function GET(request: NextRequest) {
 
   if (code) {
     const supabase = createClient(
-      process.env.SUPABASE_URL!,
-      process.env.SUPABASE_SECRET_KEY!
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
-    await supabase.auth.exchangeCodeForSession(code);
+    const { data } = await supabase.auth.exchangeCodeForSession(code);
+
+    if (data.session?.user) {
+      const { user } = data.session;
+      const fullName = user.user_metadata?.full_name as string | undefined;
+      if (fullName) {
+        await supabase
+          .from("profiles")
+          .upsert({ id: user.id, full_name: fullName }, { onConflict: "id" });
+      }
+    }
   }
 
   return NextResponse.redirect(`${origin}/dashboard`);
