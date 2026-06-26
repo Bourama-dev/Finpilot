@@ -11,6 +11,7 @@ const ACTIVITIES: Record<string, { label: string; color: string; emoji: string }
   cle_avenir: { label: "CléAvenir",  color: "#f59e0b", emoji: "🏢" },
   hakily:     { label: "Hakily",      color: "#10b981", emoji: "🤖" },
   personnel:  { label: "Personnel",   color: "#ec4899", emoji: "🏠" },
+  freelance:  { label: "Freelance",   color: "#0ea5e9", emoji: "💼" },
 };
 
 const FREQ_LABELS: Record<string, string> = {

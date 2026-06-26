@@ -11,6 +11,7 @@ const activityColors: Record<string, string> = {
   cle_avenir: "#f59e0b",
   hakily: "#10b981",
   personnel: "#ec4899",
+  freelance: "#0ea5e9",
 };
 
 const activityLabels: Record<string, string> = {
@@ -18,6 +19,7 @@ const activityLabels: Record<string, string> = {
   cle_avenir: "CléAvenir",
   hakily: "Hakily",
   personnel: "Personnel",
+  freelance: "Freelance",
 };
 
 type Transaction = {

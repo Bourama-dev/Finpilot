@@ -1,4 +1,4 @@
-export type Activity = "alternance" | "cle_avenir" | "hakily" | "personnel";
+export type Activity = "alternance" | "cle_avenir" | "hakily" | "personnel" | "freelance";
 export type TransactionType = "income" | "expense";
 export type BudgetPeriod = "monthly" | "quarterly" | "yearly";
 

@@ -10,6 +10,7 @@ const ACTIVITIES = [
   { key: "cle_avenir", label: "CléAvenir",  color: "#f59e0b", emoji: "🏢" },
   { key: "hakily",     label: "Hakily",      color: "#10b981", emoji: "🤖" },
   { key: "personnel",  label: "Personnel",   color: "#ec4899", emoji: "🏠" },
+  { key: "freelance",  label: "Freelance",   color: "#0ea5e9", emoji: "💼" },
 ];
 
 const CATEGORY_SUGGESTIONS = {
