@@ -22,12 +22,12 @@ const activityLabels: Record<string, string> = {
 
 type Transaction = {
   id: string;
-  label: string;
+  description: string | null;
   amount: number;
   type: "income" | "expense";
   activity: string | null;
   date: string;
-  category: string | null;
+  category: string;
 };
 
 function KPICard({
@@ -99,7 +99,7 @@ export default function DashboardPage() {
 
       const { data } = await supabase
         .from("transactions")
-        .select("id, label, amount, type, activity, date, category")
+        .select("id, description, amount, type, activity, date, category")
         .order("date", { ascending: false })
         .limit(20);
 
@@ -316,11 +316,10 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
-                      {tx.label}
+                      {tx.description ?? tx.category}
                     </p>
                     <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                       {actLabel && <span>{actLabel} · </span>}
-                      {tx.category && <span>{tx.category} · </span>}
                       {new Date(tx.date).toLocaleDateString("fr-FR")}
                     </p>
                   </div>
