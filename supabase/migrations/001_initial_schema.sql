@@ -1,14 +1,25 @@
 -- Enable UUID extension
 create extension if not exists "uuid-ossp";
 
--- Enums
-create type activity_type as enum ('alternance', 'cle_avenir', 'hakily', 'personnel');
-create type transaction_type as enum ('income', 'expense');
-create type budget_period as enum ('monthly', 'quarterly', 'yearly');
-create type recurring_frequency as enum ('daily', 'weekly', 'monthly', 'yearly');
+-- Enums (ignore if already exist)
+do $$ begin
+  create type activity_type as enum ('alternance', 'cle_avenir', 'hakily', 'personnel');
+exception when duplicate_object then null; end $$;
 
--- Profiles (extends auth.users)
-create table profiles (
+do $$ begin
+  create type transaction_type as enum ('income', 'expense');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type budget_period as enum ('monthly', 'quarterly', 'yearly');
+exception when duplicate_object then null; end $$;
+
+do $$ begin
+  create type recurring_frequency as enum ('daily', 'weekly', 'monthly', 'yearly');
+exception when duplicate_object then null; end $$;
+
+-- Profiles
+create table if not exists profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null,
   full_name text,
@@ -19,8 +30,14 @@ create table profiles (
   updated_at timestamptz not null default now()
 );
 
+-- Add missing columns to profiles if they don't exist
+alter table profiles add column if not exists currency text not null default 'EUR';
+alter table profiles add column if not exists theme text not null default 'light';
+alter table profiles add column if not exists email text;
+alter table profiles add column if not exists updated_at timestamptz not null default now();
+
 -- Categories
-create table categories (
+create table if not exists categories (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid references profiles(id) on delete cascade,
   activity activity_type,
@@ -33,8 +50,21 @@ create table categories (
   created_at timestamptz not null default now()
 );
 
+-- Documents (create before transactions for FK)
+create table if not exists documents (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid not null references profiles(id) on delete cascade,
+  activity activity_type,
+  name text not null,
+  type text not null,
+  size integer not null,
+  storage_path text not null unique,
+  tags text[],
+  created_at timestamptz not null default now()
+);
+
 -- Transactions
-create table transactions (
+create table if not exists transactions (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references profiles(id) on delete cascade,
   activity activity_type not null,
@@ -48,31 +78,13 @@ create table transactions (
   recurring_frequency recurring_frequency,
   tags text[],
   notes text,
-  document_id uuid,
+  document_id uuid references documents(id) on delete set null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
--- Documents
-create table documents (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid not null references profiles(id) on delete cascade,
-  activity activity_type,
-  name text not null,
-  type text not null,
-  size integer not null,
-  storage_path text not null unique,
-  tags text[],
-  created_at timestamptz not null default now()
-);
-
--- Add FK from transactions to documents
-alter table transactions
-  add constraint fk_transaction_document
-  foreign key (document_id) references documents(id) on delete set null;
-
 -- Budgets
-create table budgets (
+create table if not exists budgets (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references profiles(id) on delete cascade,
   activity activity_type not null,
@@ -86,7 +98,7 @@ create table budgets (
 );
 
 -- Goals
-create table goals (
+create table if not exists goals (
   id uuid primary key default uuid_generate_v4(),
   user_id uuid not null references profiles(id) on delete cascade,
   name text not null,
@@ -100,7 +112,7 @@ create table goals (
   created_at timestamptz not null default now()
 );
 
--- Row Level Security
+-- Row Level Security (idempotent)
 alter table profiles enable row level security;
 alter table categories enable row level security;
 alter table transactions enable row level security;
@@ -108,9 +120,17 @@ alter table documents enable row level security;
 alter table budgets enable row level security;
 alter table goals enable row level security;
 
--- Policies
+-- Policies (drop & recreate to avoid conflicts)
+drop policy if exists "own_profile" on profiles;
+drop policy if exists "own_activities" on categories;
+drop policy if exists "read_default_categories" on categories;
+drop policy if exists "own_transactions" on transactions;
+drop policy if exists "own_documents" on documents;
+drop policy if exists "own_budgets" on budgets;
+drop policy if exists "own_goals" on goals;
+
 create policy "own_profile" on profiles for all using (auth.uid() = id);
-create policy "own_activities" on categories for all using (auth.uid() = user_id);
+create policy "own_categories" on categories for all using (auth.uid() = user_id);
 create policy "read_default_categories" on categories for select using (is_default = true);
 create policy "own_transactions" on transactions for all using (auth.uid() = user_id);
 create policy "own_documents" on documents for all using (auth.uid() = user_id);
@@ -133,6 +153,7 @@ begin
 end;
 $$;
 
+drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute function handle_new_user();
@@ -146,40 +167,47 @@ begin
 end;
 $$;
 
+drop trigger if exists profiles_updated_at on profiles;
 create trigger profiles_updated_at before update on profiles
   for each row execute function set_updated_at();
+
+drop trigger if exists transactions_updated_at on transactions;
 create trigger transactions_updated_at before update on transactions
   for each row execute function set_updated_at();
 
--- Seed default categories
-insert into categories (user_id, activity, type, name, icon, color, is_default) values
-  -- Income
-  (null, null, 'income', 'Salaire', '💼', '#6366f1', true),
-  (null, null, 'income', 'Freelance', '🤝', '#8b5cf6', true),
-  (null, null, 'income', 'Remboursement', '↩️', '#06b6d4', true),
-  (null, 'alternance', 'income', 'Rémunération alternance', '🎓', '#6366f1', true),
-  (null, 'cle_avenir', 'income', 'Prestation CléAvenir', '🏢', '#f59e0b', true),
-  (null, 'hakily', 'income', 'Mission Hakily', '🤖', '#10b981', true),
-  -- Expense personal
-  (null, null, 'expense', 'Loyer', '🏠', '#ef4444', true),
-  (null, null, 'expense', 'Courses', '🛒', '#f97316', true),
-  (null, null, 'expense', 'Transport', '🚇', '#eab308', true),
-  (null, null, 'expense', 'Loisirs', '🎮', '#ec4899', true),
-  (null, null, 'expense', 'Santé', '🏥', '#14b8a6', true),
-  (null, null, 'expense', 'Abonnements', '📱', '#8b5cf6', true),
-  (null, null, 'expense', 'Restaurant', '🍽️', '#f97316', true),
-  -- Expense pro
-  (null, 'cle_avenir', 'expense', 'Logiciels', '💻', '#6366f1', true),
-  (null, 'cle_avenir', 'expense', 'Marketing', '📣', '#f59e0b', true),
-  (null, 'hakily', 'expense', 'API & Infra IA', '🔌', '#10b981', true),
-  (null, null, 'expense', 'Formation', '📚', '#06b6d4', true),
-  (null, null, 'expense', 'Matériel', '🖥️', '#78716c', true),
-  (null, null, 'expense', 'Comptabilité', '📊', '#6366f1', true);
+-- Seed default categories (only if none exist)
+insert into categories (user_id, activity, type, name, icon, color, is_default)
+select * from (values
+  (null::uuid, null::activity_type, 'income'::transaction_type,  'Salaire',                  '💼', '#6366f1', true),
+  (null,        null,               'income',                     'Freelance',                '🤝', '#8b5cf6', true),
+  (null,        null,               'income',                     'Remboursement',            '↩️', '#06b6d4', true),
+  (null,        'alternance',       'income',                     'Rémunération alternance',  '🎓', '#6366f1', true),
+  (null,        'cle_avenir',       'income',                     'Prestation CléAvenir',     '🏢', '#f59e0b', true),
+  (null,        'hakily',           'income',                     'Mission Hakily',           '🤖', '#10b981', true),
+  (null,        null,               'expense',                    'Loyer',                    '🏠', '#ef4444', true),
+  (null,        null,               'expense',                    'Courses',                  '🛒', '#f97316', true),
+  (null,        null,               'expense',                    'Transport',                '🚇', '#eab308', true),
+  (null,        null,               'expense',                    'Loisirs',                  '🎮', '#ec4899', true),
+  (null,        null,               'expense',                    'Santé',                    '🏥', '#14b8a6', true),
+  (null,        null,               'expense',                    'Abonnements',              '📱', '#8b5cf6', true),
+  (null,        null,               'expense',                    'Restaurant',               '🍽️', '#f97316', true),
+  (null,        'cle_avenir',       'expense',                    'Logiciels',                '💻', '#6366f1', true),
+  (null,        'cle_avenir',       'expense',                    'Marketing',                '📣', '#f59e0b', true),
+  (null,        'hakily',           'expense',                    'API & Infra IA',           '🔌', '#10b981', true),
+  (null,        null,               'expense',                    'Formation',                '📚', '#06b6d4', true),
+  (null,        null,               'expense',                    'Matériel',                 '🖥️', '#78716c', true),
+  (null,        null,               'expense',                    'Comptabilité',             '📊', '#6366f1', true)
+) as v(user_id, activity, type, name, icon, color, is_default)
+where not exists (select 1 from categories where is_default = true);
 
--- Storage bucket for documents
+-- Storage bucket
 insert into storage.buckets (id, name, public)
   values ('documents', 'documents', false)
   on conflict (id) do nothing;
+
+drop policy if exists "upload_own_documents" on storage.objects;
+drop policy if exists "read_own_documents" on storage.objects;
+drop policy if exists "delete_own_documents" on storage.objects;
 
 create policy "upload_own_documents"
   on storage.objects for insert
