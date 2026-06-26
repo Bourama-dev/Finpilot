@@ -9,29 +9,30 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.106.0",
+    "@hookform/resolvers": "^3.9.0",
+    "@supabase/server": "latest",
+    "@supabase/supabase-js": "^2",
+    "clsx": "^2.1.1",
+    "framer-motion": "^11.3.30",
+    "lucide-react": "^0.427.0",
     "next": "14.2.35",
     "react": "^18",
     "react-dom": "^18",
-    "@supabase/server": "latest",
-    "@supabase/supabase-js": "^2",
-    "recharts": "^2.12.7",
-    "lucide-react": "^0.427.0",
     "react-hook-form": "^7.53.0",
-    "zod": "^3.23.8",
-    "@hookform/resolvers": "^3.9.0",
-    "framer-motion": "^11.3.30",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.2"
+    "recharts": "^2.12.7",
+    "tailwind-merge": "^2.5.2",
+    "zod": "^3.23.8"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "autoprefixer": "^10.0.1",
     "eslint": "^8",
     "eslint-config-next": "14.2.35",
-    "tailwindcss": "^3.4.1",
     "postcss": "^8",
-    "autoprefixer": "^10.0.1"
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5"
   }
 }
