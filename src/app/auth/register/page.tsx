@@ -23,23 +23,34 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: `${location.origin}/auth/callback`,
-        data: { full_name: fullName },
-      },
-    });
-    if (error) setError(error.message);
-    else setSent(true);
-    setLoading(false);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email,
+        options: {
+          emailRedirectTo: `${location.origin}/auth/callback`,
+          data: { full_name: fullName },
+        },
+      });
+      if (error) setError(error.message);
+      else setSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Une erreur est survenue. Vérifiez votre connexion.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function handleGoogle() {
-    await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: { redirectTo: `${location.origin}/auth/callback` },
-    });
+    setError(null);
+    try {
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: { redirectTo: `${location.origin}/auth/callback` },
+      });
+      if (error) setError(error.message);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur avec Google. Réessayez.");
+    }
   }
 
   return (
@@ -67,17 +78,21 @@ export default function RegisterPage() {
 
         {sent ? (
           <div
-            className="rounded-xl p-6 text-center space-y-2"
+            className="rounded-xl p-6 text-center space-y-3"
             style={{
               backgroundColor: "var(--success-light)",
               border: "1px solid var(--success)",
             }}
           >
+            <p className="text-2xl">✉️</p>
             <p className="font-semibold" style={{ color: "var(--success)" }}>
-              ✓ Lien envoyé !
+              Lien envoyé !
             </p>
             <p className="text-sm" style={{ color: "var(--text-secondary)" }}>
-              Vérifiez <strong>{email}</strong> pour activer votre compte.
+              Vérifiez <strong>{email}</strong> et cliquez sur le lien pour activer votre compte.
+            </p>
+            <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+              Pensez à vérifier vos spams.
             </p>
           </div>
         ) : (
@@ -94,41 +109,60 @@ export default function RegisterPage() {
             </h2>
 
             {error && (
-              <p className="text-sm text-center" style={{ color: "var(--danger)" }}>
+              <div
+                className="rounded-lg px-4 py-3 text-sm text-center"
+                style={{
+                  backgroundColor: "var(--danger-light)",
+                  border: "1px solid var(--danger)",
+                  color: "var(--danger)",
+                }}
+              >
                 {error}
-              </p>
+              </div>
             )}
 
             <form onSubmit={handleMagicLink} className="space-y-3">
-              <input
-                type="text"
-                placeholder="Prénom et nom"
-                value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
-                required
-                className="w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
-                style={inputStyle}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
-              <input
-                type="email"
-                placeholder="votre@email.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
-                style={inputStyle}
-                onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
-                onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
-              />
+              <div className="space-y-1">
+                <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                  Prénom et nom
+                </label>
+                <input
+                  type="text"
+                  placeholder="Jean Dupont"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                  required
+                  autoComplete="name"
+                  className="w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
+                  style={inputStyle}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-xs font-medium" style={{ color: "var(--text-secondary)" }}>
+                  Adresse e-mail
+                </label>
+                <input
+                  type="email"
+                  placeholder="votre@email.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                  className="w-full px-4 py-2.5 rounded-lg text-sm outline-none transition-all"
+                  style={inputStyle}
+                  onFocus={(e) => (e.currentTarget.style.borderColor = "var(--accent)")}
+                  onBlur={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
+                />
+              </div>
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2.5 rounded-lg text-white font-semibold text-sm transition-opacity disabled:opacity-50"
+                className="w-full py-2.5 rounded-lg text-white font-semibold text-sm transition-opacity disabled:opacity-50 mt-1"
                 style={{ backgroundColor: "var(--accent)" }}
               >
-                {loading ? "Envoi…" : "Créer mon compte →"}
+                {loading ? "Envoi en cours…" : "Créer mon compte →"}
               </button>
             </form>
 
@@ -139,6 +173,7 @@ export default function RegisterPage() {
             </div>
 
             <button
+              type="button"
               onClick={handleGoogle}
               className="w-full py-2.5 rounded-lg text-sm font-medium flex items-center justify-center gap-2 transition-opacity hover:opacity-80"
               style={{
