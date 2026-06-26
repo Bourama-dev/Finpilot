@@ -17,6 +17,15 @@ const CATEGORY_SUGGESTIONS = {
   expense: ["Loyer", "Alimentation", "Transport", "Abonnements", "Équipement", "Formation", "Marketing", "Charges", "Assurance", "Taxes", "Autre"],
 };
 
+const FREQUENCIES = [
+  { key: "daily",   label: "Quotidien",   short: "/ jour" },
+  { key: "weekly",  label: "Hebdomadaire", short: "/ sem." },
+  { key: "monthly", label: "Mensuel",     short: "/ mois" },
+  { key: "yearly",  label: "Annuel",      short: "/ an"   },
+] as const;
+
+type Frequency = typeof FREQUENCIES[number]["key"];
+
 type TX = {
   id: string;
   activity: string;
@@ -26,6 +35,8 @@ type TX = {
   category: string;
   description: string | null;
   date: string;
+  is_recurring: boolean;
+  recurring_frequency: Frequency | null;
 };
 
 type FormState = {
@@ -35,6 +46,8 @@ type FormState = {
   category: string;
   description: string;
   date: string;
+  is_recurring: boolean;
+  recurring_frequency: Frequency;
 };
 
 const EMPTY: FormState = {
@@ -44,6 +57,8 @@ const EMPTY: FormState = {
   category: "",
   description: "",
   date: new Date().toISOString().slice(0, 10),
+  is_recurring: false,
+  recurring_frequency: "monthly",
 };
 
 const fmt = (n: number) =>
@@ -70,7 +85,7 @@ export default function TransactionsPage() {
   async function load() {
     const { data } = await supabase
       .from("transactions")
-      .select("id, activity, type, amount, currency, category, description, date")
+      .select("id, activity, type, amount, currency, category, description, date, is_recurring, recurring_frequency")
       .order("date", { ascending: false });
     if (data) setTxs(data as TX[]);
     setLoading(false);
@@ -97,7 +112,7 @@ export default function TransactionsPage() {
   }
 
   function openEdit(tx: TX) {
-    setForm({ type: tx.type, activity: tx.activity, amount: String(tx.amount), category: tx.category, description: tx.description ?? "", date: tx.date });
+    setForm({ type: tx.type, activity: tx.activity, amount: String(tx.amount), category: tx.category, description: tx.description ?? "", date: tx.date, is_recurring: tx.is_recurring, recurring_frequency: tx.recurring_frequency ?? "monthly" });
     setEditId(tx.id);
     setFormError(null);
     setShowForm(true);
@@ -120,6 +135,8 @@ export default function TransactionsPage() {
       category: form.category,
       description: form.description || null,
       date: form.date,
+      is_recurring: form.is_recurring,
+      recurring_frequency: form.is_recurring ? form.recurring_frequency : null,
     };
 
     try {
@@ -227,8 +244,13 @@ export default function TransactionsPage() {
                     <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
                       {tx.description ?? tx.category}
                     </p>
-                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                    <p className="text-xs mt-0.5 flex items-center gap-1.5 flex-wrap" style={{ color: "var(--text-muted)" }}>
                       {act?.label ?? tx.activity} · {tx.category} · {new Date(tx.date).toLocaleDateString("fr-FR")}
+                      {tx.is_recurring && tx.recurring_frequency && (
+                        <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded text-xs font-medium" style={{ backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)" }}>
+                          🔁 {FREQUENCIES.find(f => f.key === tx.recurring_frequency)?.label}
+                        </span>
+                      )}
                     </p>
                   </div>
                   <p className="text-sm font-bold tabular-nums shrink-0"
@@ -304,6 +326,35 @@ export default function TransactionsPage() {
               {/* Date */}
               <input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} required
                 className="w-full px-3 py-2.5 rounded-lg text-sm outline-none" style={inputStyle} />
+
+              {/* Recurring */}
+              <div className="space-y-2">
+                <button type="button" onClick={() => setForm(f => ({ ...f, is_recurring: !f.is_recurring }))}
+                  className="flex items-center gap-2.5 w-full px-3 py-2.5 rounded-lg text-sm transition-all"
+                  style={form.is_recurring
+                    ? { backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)", border: "1px solid var(--accent)", color: "var(--accent)" }
+                    : { ...inputStyle, color: "var(--text-secondary)" }}>
+                  <span className="w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-all text-xs"
+                    style={form.is_recurring ? { backgroundColor: "var(--accent)", borderColor: "var(--accent)", color: "#fff" } : { borderColor: "var(--text-muted)" }}>
+                    {form.is_recurring ? "✓" : ""}
+                  </span>
+                  Transaction récurrente
+                </button>
+
+                {form.is_recurring && (
+                  <div className="grid grid-cols-4 gap-1.5">
+                    {FREQUENCIES.map(f => (
+                      <button key={f.key} type="button" onClick={() => setForm(s => ({ ...s, recurring_frequency: f.key }))}
+                        className="py-2 rounded-lg text-xs font-medium transition-all"
+                        style={form.recurring_frequency === f.key
+                          ? { backgroundColor: "var(--accent)", color: "#fff" }
+                          : { backgroundColor: "var(--bg-tertiary)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+                        {f.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <button type="submit" disabled={saving} className="w-full py-2.5 rounded-xl text-white font-semibold text-sm disabled:opacity-50"
                 style={{ backgroundColor: "var(--accent)" }}>
