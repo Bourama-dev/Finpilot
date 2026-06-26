@@ -31,8 +31,14 @@ export default function RegisterPage() {
           data: { full_name: fullName },
         },
       });
-      if (error) setError(error.message);
-      else setSent(true);
+      if (error) {
+        const msg = error.message && error.message !== "{}" && error.message !== "[]"
+          ? error.message
+          : "Impossible d'envoyer le lien. Vérifiez que l'email est valide et réessayez.";
+        setError(msg);
+      } else {
+        setSent(true);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Une erreur est survenue. Vérifiez votre connexion.");
     } finally {
