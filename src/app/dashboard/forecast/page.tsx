@@ -227,7 +227,7 @@ export default function ForecastPage() {
 
   // Per-activity URSSAF base (recurring + receivables, excluding history component)
   const urssafActDetails = useMemo(() =>
-    [...URSSAF_ACTS].map(actKey => {
+    Array.from(URSSAF_ACTS).map(actKey => {
       const act = ACTIVITIES[actKey];
       const base = months.reduce((total, m) => {
         const recurPart = recurring
