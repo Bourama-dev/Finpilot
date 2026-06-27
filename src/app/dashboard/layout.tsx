@@ -12,8 +12,9 @@ const navItems = [
   { href: "/dashboard/documents", label: "Documents", icon: "📄" },
   { href: "/dashboard/budgets", label: "Budgets", icon: "🎯" },
   { href: "/dashboard/receivables", label: "À percevoir", icon: "📬" },
-  { href: "/dashboard/purchases", label: "Achats", icon: "🛒" },
-  { href: "/dashboard/forecast", label: "Prévisionnel", icon: "🔮" },
+  { href: "/dashboard/purchases",        label: "Achats",           icon: "🛒" },
+  { href: "/dashboard/recommendations",  label: "Recommandations",  icon: "💡" },
+  { href: "/dashboard/forecast",         label: "Prévisionnel",     icon: "🔮" },
   { href: "/dashboard/reports", label: "Rapports", icon: "📊" },
   { href: "/dashboard/settings", label: "Paramètres", icon: "⚙️" },
 ];
