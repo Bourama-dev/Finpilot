@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
+import type { Activity } from "@/types/database";
 
 const ACTIVITIES = [
   { key: "alternance", label: "Alternance", color: "#6366f1", emoji: "🎓" },
@@ -52,7 +53,7 @@ type Purchase = {
   id: string;
   name: string;
   amount: number;
-  activity: string;
+  activity: Activity;
   category: string;
   payment_mode: PaymentMode;
   installment_fees_pct: number;
@@ -68,7 +69,7 @@ type Purchase = {
 type FormState = {
   name: string;
   amount: string;
-  activity: string;
+  activity: Activity;
   category: string;
   payment_mode: PaymentMode;
   installment_fees_pct: string;
@@ -188,7 +189,7 @@ export default function PurchasesPage() {
     const payload = {
       name: form.name.trim(),
       amount,
-      activity: form.activity as Purchase["activity"],
+      activity: form.activity,
       category: form.category,
       payment_mode: form.payment_mode,
       installment_fees_pct: parseFloat(form.installment_fees_pct) || 0,
@@ -611,7 +612,7 @@ export default function PurchasesPage() {
                   </div>
                   <div>
                     <label className="block text-xs font-medium mb-1.5" style={{ color: "var(--text-secondary)" }}>Activité</label>
-                    <select value={form.activity} onChange={e => set("activity", e.target.value)}
+                    <select value={form.activity} onChange={e => set("activity", e.target.value as Activity)}
                       className="w-full px-3 py-2.5 rounded-xl text-sm outline-none appearance-none"
                       style={{ backgroundColor: "var(--bg-tertiary)", border: "1px solid var(--border)", color: "var(--text-primary)" }}>
                       {ACTIVITIES.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
