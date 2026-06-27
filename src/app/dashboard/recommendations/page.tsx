@@ -431,13 +431,10 @@ export default function RecommendationsPage() {
     setAiError(null);
     setAiAdvice(null);
     try {
-      const res = await fetch("/api/ai-advisor", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ context: aiContext }),
+      const { data, error } = await supabase.functions.invoke("ai-advisor", {
+        body: { context: aiContext },
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Erreur inconnue");
+      if (error) throw error;
       setAiAdvice(data.advice);
     } catch (err) {
       setAiError(err instanceof Error ? err.message : "Erreur lors de l'analyse");
