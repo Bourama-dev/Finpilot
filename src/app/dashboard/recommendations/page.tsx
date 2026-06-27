@@ -622,7 +622,7 @@ export default function RecommendationsPage() {
                 if (!trimmed) return null;
                 const isBullet = trimmed.startsWith("- ") || trimmed.startsWith("• ");
                 const text = isBullet ? trimmed.slice(2) : trimmed;
-                const boldMatch = text.match(/^\*\*(.+?)\*\*[:：]?\s*(.*)/s);
+                const boldMatch = text.match(/^\*\*(.+?)\*\*[:：]?\s*([\s\S]*)/);
                 return (
                   <p key={i} className={isBullet ? "flex gap-2" : ""}>
                     {isBullet && <span style={{ color: "var(--accent)", marginTop: "2px" }}>▸</span>}
