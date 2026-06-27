@@ -81,10 +81,11 @@ function expectedPaymentMonth(r: PendingReceivable): Date {
 
   if (r.service_date) {
     const sd = new Date(r.service_date);
-    // invoiced → payment in 1 month from service date; to_invoice → 2 months (1 to invoice + 1 to pay)
-    const monthsToAdd = r.status === "invoiced" ? 1 : 2;
-    const expected = new Date(sd.getFullYear(), sd.getMonth() + monthsToAdd, 1);
-    return expected <= now ? nextMonth : expected;
+    if (!isNaN(sd.getTime())) {
+      // Both statuses: 1 month from service date (30-day payment terms, invoice sent promptly)
+      const expected = new Date(sd.getFullYear(), sd.getMonth() + 1, 1);
+      return expected <= now ? nextMonth : expected;
+    }
   }
 
   return nextMonth;
