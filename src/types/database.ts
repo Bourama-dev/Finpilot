@@ -98,7 +98,26 @@ type ReceivableRow = {
   updated_at: string;
 };
 
-export type { ProfileRow, TransactionRow, CategoryRow, DocumentRow, BudgetRow, GoalRow, ReceivableRow };
+type PurchaseRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  amount: number;
+  activity: Activity;
+  category: string;
+  payment_mode: "comptant" | "3x" | "4x" | "credit";
+  installment_fees_pct: number;
+  credit_months: number | null;
+  priority: "high" | "medium" | "low";
+  status: "planned" | "in_progress" | "done" | "cancelled";
+  target_date: string | null;
+  purchase_date: string | null;
+  notes: string | null;
+  created_at: string;
+  updated_at: string;
+};
+
+export type { ProfileRow, TransactionRow, CategoryRow, DocumentRow, BudgetRow, GoalRow, ReceivableRow, PurchaseRow };
 
 export type Database = {
   public: {
@@ -167,6 +186,19 @@ export type Database = {
         Update: Partial<Omit<ReceivableRow, "id" | "user_id" | "created_at" | "updated_at">>;
         Relationships: [
           { foreignKeyName: "receivables_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
+        ];
+      };
+      purchases: {
+        Row: PurchaseRow;
+        Insert: Omit<PurchaseRow, "id" | "created_at" | "updated_at" | "credit_months" | "target_date" | "purchase_date" | "notes"> & {
+          credit_months?: number | null;
+          target_date?: string | null;
+          purchase_date?: string | null;
+          notes?: string | null;
+        };
+        Update: Partial<Omit<PurchaseRow, "id" | "user_id" | "created_at" | "updated_at">>;
+        Relationships: [
+          { foreignKeyName: "purchases_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
         ];
       };
     };
