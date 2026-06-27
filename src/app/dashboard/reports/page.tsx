@@ -28,6 +28,7 @@ type Receivable = {
   status: "to_invoice" | "invoiced" | "paid";
   activity: string;
   service_date: string | null;
+  updated_at: string;
 };
 
 const fmt = (n: number) =>
@@ -57,8 +58,7 @@ export default function ReportsPage() {
           .order("date", { ascending: true }),
         supabase
           .from("receivables")
-          .select("client, amount, status, activity, service_date")
-          .neq("status", "paid"),
+          .select("client, amount, status, activity, service_date, updated_at"),
       ]);
       if (txData) setTxs(txData as TX[]);
       if (recData) setReceivables(recData as Receivable[]);
@@ -68,34 +68,59 @@ export default function ReportsPage() {
     load();
   }, [year]);
 
+  // Créances en attente (à facturer / facturées)
+  const pendingReceivables = useMemo(
+    () => receivables.filter(r => r.status !== "paid"),
+    [receivables],
+  );
+
+  // Créances payées dans l'année sélectionnée (date de paiement = updated_at)
+  const paidReceivables = useMemo(
+    () => receivables.filter(r =>
+      r.status === "paid" && r.updated_at.startsWith(String(year))
+    ),
+    [receivables, year],
+  );
+
   const monthly = useMemo(() => {
     return Array.from({ length: 12 }, (_, i) => {
       const m = String(i + 1).padStart(2, "0");
       const monthTxs = txs.filter(t => t.date.startsWith(`${year}-${m}`));
-      const income  = monthTxs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+      const txIncome  = monthTxs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+      const recPaid   = paidReceivables
+        .filter(r => r.updated_at.startsWith(`${year}-${m}`))
+        .reduce((s, r) => s + r.amount, 0);
+      const income  = txIncome + recPaid;
       const expense = monthTxs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
       return { month: MONTHS_FR[i], income, expense, balance: income - expense };
     });
-  }, [txs, year]);
+  }, [txs, paidReceivables, year]);
 
-  const totals = useMemo(() => ({
-    income:  txs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0),
-    expense: txs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0),
-  }), [txs]);
+  const totals = useMemo(() => {
+    const txIncome  = txs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+    const recIncome = paidReceivables.reduce((s, r) => s + r.amount, 0);
+    return {
+      income:  txIncome + recIncome,
+      expense: txs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0),
+      fromReceivables: recIncome,
+    };
+  }, [txs, paidReceivables]);
 
   const totalReceivable = useMemo(
-    () => receivables.reduce((s, r) => s + r.amount, 0),
-    [receivables],
+    () => pendingReceivables.reduce((s, r) => s + r.amount, 0),
+    [pendingReceivables],
   );
 
   const byActivity = useMemo(() =>
     ACTIVITIES.map(act => {
-      const actTxs = txs.filter(t => t.activity === act.key);
-      const income  = actTxs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
-      const expense = actTxs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
-      const pending = receivables.filter(r => r.activity === act.key).reduce((s, r) => s + r.amount, 0);
+      const actTxs   = txs.filter(t => t.activity === act.key);
+      const txIncome = actTxs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+      const recPaid  = paidReceivables.filter(r => r.activity === act.key).reduce((s, r) => s + r.amount, 0);
+      const income   = txIncome + recPaid;
+      const expense  = actTxs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+      const pending  = pendingReceivables.filter(r => r.activity === act.key).reduce((s, r) => s + r.amount, 0);
       return { ...act, income, expense, balance: income - expense, pending };
-    }), [txs, receivables]);
+    }), [txs, paidReceivables, pendingReceivables]);
 
   const topCategories = useMemo(() => {
     const map: Record<string, number> = {};
@@ -109,11 +134,11 @@ export default function ReportsPage() {
 
   const receivablesByClient = useMemo(() => {
     const map: Record<string, number> = {};
-    receivables.forEach(r => {
+    pendingReceivables.forEach(r => {
       map[r.client] = (map[r.client] ?? 0) + r.amount;
     });
     return Object.entries(map).sort((a, b) => b[1] - a[1]);
-  }, [receivables]);
+  }, [pendingReceivables]);
 
   const maxMonthly = Math.max(...monthly.map(m => Math.max(m.income, m.expense)), 1);
 
@@ -150,11 +175,18 @@ export default function ReportsPage() {
         <>
           {/* KPI Row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+            {/* Revenus (avec sous-titre si des créances payées sont incluses) */}
+            <div className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>Revenus</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color: "var(--success)", fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(totals.income)}</p>
+              {totals.fromReceivables > 0 && (
+                <p className="text-[10px] mt-0.5" style={{ color: "var(--success)", opacity: 0.7 }}>dont {fmt(totals.fromReceivables)} créances</p>
+              )}
+            </div>
             {[
-              { label: "Revenus",      value: totals.income,                    color: "var(--success)" },
-              { label: "Dépenses",     value: totals.expense,                   color: "var(--danger)"  },
-              { label: "Épargne nette",value: totals.income - totals.expense,   color: totals.income >= totals.expense ? "var(--success)" : "var(--danger)" },
-              { label: "À percevoir",  value: totalReceivable,                  color: "var(--warning, #f59e0b)" },
+              { label: "Dépenses",      value: totals.expense,                   color: "var(--danger)"  },
+              { label: "Épargne nette", value: totals.income - totals.expense,   color: totals.income >= totals.expense ? "var(--success)" : "var(--danger)" },
+              { label: "À percevoir",   value: totalReceivable,                  color: "#f59e0b" },
             ].map(({ label, value, color }) => (
               <div key={label} className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
                 <p className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</p>
@@ -253,18 +285,18 @@ export default function ReportsPage() {
                 ))}
               </div>
               <div className="flex flex-wrap gap-2 pt-1">
-                {receivables.filter(r => r.status === "to_invoice").length > 0 && (
+                {pendingReceivables.filter(r => r.status === "to_invoice").length > 0 && (
                   <span className="text-xs px-2 py-1 rounded-full"
                     style={{ backgroundColor: "color-mix(in srgb, #f59e0b 12%, transparent)", color: "#f59e0b" }}>
-                    🟡 {receivables.filter(r => r.status === "to_invoice").length} à facturer
-                    · {fmt(receivables.filter(r => r.status === "to_invoice").reduce((s, r) => s + r.amount, 0))}
+                    🟡 {pendingReceivables.filter(r => r.status === "to_invoice").length} à facturer
+                    · {fmt(pendingReceivables.filter(r => r.status === "to_invoice").reduce((s, r) => s + r.amount, 0))}
                   </span>
                 )}
-                {receivables.filter(r => r.status === "invoiced").length > 0 && (
+                {pendingReceivables.filter(r => r.status === "invoiced").length > 0 && (
                   <span className="text-xs px-2 py-1 rounded-full"
                     style={{ backgroundColor: "color-mix(in srgb, #8b5cf6 12%, transparent)", color: "#8b5cf6" }}>
-                    🔵 {receivables.filter(r => r.status === "invoiced").length} facturées
-                    · {fmt(receivables.filter(r => r.status === "invoiced").reduce((s, r) => s + r.amount, 0))}
+                    🔵 {pendingReceivables.filter(r => r.status === "invoiced").length} facturées
+                    · {fmt(pendingReceivables.filter(r => r.status === "invoiced").reduce((s, r) => s + r.amount, 0))}
                   </span>
                 )}
               </div>
@@ -313,7 +345,7 @@ export default function ReportsPage() {
                 </p>
                 {totalReceivable > 0 && (
                   <p className="text-xs mt-1" style={{ color: "#f59e0b" }}>
-                    + {fmt(totalReceivable)} en créances à recevoir non comptabilisées
+                    + {fmt(totalReceivable)} en créances non encore perçues
                   </p>
                 )}
               </div>
