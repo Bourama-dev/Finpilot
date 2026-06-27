@@ -129,6 +129,7 @@ export default function PurchasesPage() {
   const [filter,    setFilter]    = useState<PurchaseStatus | "all">("all");
   const [saving,    setSaving]    = useState(false);
   const [deleting,  setDeleting]  = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // modal
   const [modalOpen,   setModalOpen]   = useState(false);
@@ -152,10 +153,12 @@ export default function PurchasesPage() {
   function openAdd() {
     setEditId(null);
     setForm(EMPTY);
+    setSaveError(null);
     setModalOpen(true);
   }
 
   function openEdit(p: Purchase) {
+    setSaveError(null);
     setEditId(p.id);
     setForm({
       name: p.name,
@@ -182,6 +185,7 @@ export default function PurchasesPage() {
     const amount = parseFloat(form.amount);
     if (!form.name.trim() || isNaN(amount) || amount <= 0) return;
     setSaving(true);
+    setSaveError(null);
 
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) { setSaving(false); return; }
@@ -201,13 +205,15 @@ export default function PurchasesPage() {
       notes: form.notes.trim() || null,
     };
 
-    if (editId) {
-      await supabase.from("purchases").update(payload).eq("id", editId);
-    } else {
-      await supabase.from("purchases").insert({ ...payload, user_id: user.id });
-    }
+    const { error } = editId
+      ? await supabase.from("purchases").update(payload).eq("id", editId)
+      : await supabase.from("purchases").insert({ ...payload, user_id: user.id });
 
     setSaving(false);
+    if (error) {
+      setSaveError(error.message);
+      return;
+    }
     setModalOpen(false);
     load();
   }
@@ -689,6 +695,11 @@ export default function PurchasesPage() {
                     {saving ? "Enregistrement…" : editId ? "Mettre à jour" : "Ajouter"}
                   </button>
                 </div>
+                {saveError && (
+                  <p className="text-xs text-center mt-2" style={{ color: "var(--danger)" }}>
+                    Erreur : {saveError}
+                  </p>
+                )}
               </div>
             </div>
           </div>
