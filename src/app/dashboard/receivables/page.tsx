@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
+import type { Activity } from "@/types/database";
 
 const ACTIVITIES = [
   { key: "freelance",  label: "Freelance",   color: "#0ea5e9", emoji: "💼" },
@@ -30,7 +31,7 @@ type Receivable = {
   status: Status;
   service_date: string | null;
   description: string | null;
-  activity: string;
+  activity: Activity;
   created_at: string;
 };
 
@@ -41,7 +42,7 @@ type FormState = {
   status: Status;
   service_date: string;
   description: string;
-  activity: string;
+  activity: Activity;
 };
 
 const EMPTY: FormState = {
@@ -140,11 +141,24 @@ export default function ReceivablesPage() {
 
     try {
       if (editId) {
+        const prev = items.find(r => r.id === editId);
         const { error } = await supabase.from("receivables").update(payload).eq("id", editId);
         if (error) throw error;
+        if (form.status === "paid" && prev?.status !== "paid") {
+          await createPaymentTransaction(
+            { activity: form.activity, amount: parseFloat(form.amount), client: form.client.trim(), invoice_ref: form.invoice_ref.trim() || null },
+            user.id,
+          );
+        }
       } else {
         const { error } = await supabase.from("receivables").insert(payload);
         if (error) throw error;
+        if (form.status === "paid") {
+          await createPaymentTransaction(
+            { activity: form.activity, amount: parseFloat(form.amount), client: form.client.trim(), invoice_ref: form.invoice_ref.trim() || null },
+            user.id,
+          );
+        }
       }
       setShowForm(false);
       await load();
@@ -155,8 +169,33 @@ export default function ReceivablesPage() {
     }
   }
 
+  async function createPaymentTransaction(r: { activity: Activity; amount: number; client: string; invoice_ref: string | null }, userId: string) {
+    const today = new Date().toISOString().slice(0, 10);
+    const desc = [r.client, r.invoice_ref].filter(Boolean).join(" – ");
+    await supabase.from("transactions").insert({
+      user_id: userId,
+      activity: r.activity,
+      type: "income",
+      amount: r.amount,
+      currency: "EUR",
+      category: "Créance client",
+      description: desc,
+      date: today,
+      is_recurring: false,
+    });
+  }
+
   async function markAs(id: string, status: Status) {
     await supabase.from("receivables").update({ status }).eq("id", id);
+
+    if (status === "paid") {
+      const receivable = items.find(r => r.id === id);
+      if (receivable) {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) await createPaymentTransaction(receivable, user.id);
+      }
+    }
+
     setItems(prev => prev.map(r => r.id === id ? { ...r, status } : r));
   }
 
@@ -381,7 +420,7 @@ export default function ReceivablesPage() {
                   <option value="paid">🟢 Payé</option>
                 </select>
                 {/* Activity */}
-                <select value={form.activity} onChange={e => setForm(f => ({ ...f, activity: e.target.value }))}
+                <select value={form.activity} onChange={e => setForm(f => ({ ...f, activity: e.target.value as Activity }))}
                   className="w-full px-3 py-2.5 rounded-lg text-sm outline-none" style={inputStyle}>
                   {ACTIVITIES.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
                 </select>
