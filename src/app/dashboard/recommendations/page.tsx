@@ -584,7 +584,7 @@ export default function RecommendationsPage() {
           <div>
             <h2 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>🤖 Conseiller IA</h2>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Analyse approfondie et conseils personnalisés par Claude
+              Analyse approfondie et conseils personnalisés par GPT-4o
             </p>
           </div>
           <button onClick={callAI} disabled={aiLoading}
@@ -614,7 +614,7 @@ export default function RecommendationsPage() {
             style={{ backgroundColor: "var(--bg-tertiary)", border: "1px solid var(--border)" }}>
             <p className="text-[11px] font-semibold mb-3 flex items-center gap-1.5"
               style={{ color: "var(--text-muted)" }}>
-              <span>🤖</span> Analyse de Claude · {monthLabel}
+              <span>🤖</span> Analyse de GPT-4o · {monthLabel}
             </p>
             <div className="text-sm space-y-2" style={{ color: "var(--text-primary)", lineHeight: "1.75" }}>
               {aiAdvice.split("\n").map((line, i) => {
