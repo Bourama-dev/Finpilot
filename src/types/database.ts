@@ -1,4 +1,4 @@
-export type Activity = "alternance" | "cle_avenir" | "hakily" | "personnel" | "freelance";
+export type Activity = string;
 export type TransactionType = "income" | "expense";
 export type BudgetPeriod = "monthly" | "quarterly" | "yearly";
 
@@ -98,6 +98,17 @@ type ReceivableRow = {
   updated_at: string;
 };
 
+type UserActivityRow = {
+  id: string;
+  user_id: string;
+  key: string;
+  label: string;
+  color: string;
+  emoji: string;
+  position: number;
+  created_at: string;
+};
+
 type PurchaseRow = {
   id: string;
   user_id: string;
@@ -117,7 +128,7 @@ type PurchaseRow = {
   updated_at: string;
 };
 
-export type { ProfileRow, TransactionRow, CategoryRow, DocumentRow, BudgetRow, GoalRow, ReceivableRow, PurchaseRow };
+export type { ProfileRow, TransactionRow, CategoryRow, DocumentRow, BudgetRow, GoalRow, ReceivableRow, PurchaseRow, UserActivityRow };
 
 export type Database = {
   public: {
@@ -199,6 +210,14 @@ export type Database = {
         Update: Partial<Omit<PurchaseRow, "id" | "user_id" | "created_at" | "updated_at">>;
         Relationships: [
           { foreignKeyName: "purchases_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
+        ];
+      };
+      user_activities: {
+        Row: UserActivityRow;
+        Insert: Omit<UserActivityRow, "id" | "created_at">;
+        Update: Partial<Omit<UserActivityRow, "id" | "user_id" | "created_at">>;
+        Relationships: [
+          { foreignKeyName: "user_activities_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
         ];
       };
     };

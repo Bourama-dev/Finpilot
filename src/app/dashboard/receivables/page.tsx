@@ -5,14 +5,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { Activity } from "@/types/database";
-
-const ACTIVITIES = [
-  { key: "freelance",  label: "Freelance",   color: "#0ea5e9", emoji: "💼" },
-  { key: "cle_avenir", label: "CléAvenir",  color: "#f59e0b", emoji: "🏢" },
-  { key: "hakily",     label: "Hakily",      color: "#10b981", emoji: "🤖" },
-  { key: "alternance", label: "Alternance",  color: "#6366f1", emoji: "🎓" },
-  { key: "personnel",  label: "Personnel",   color: "#ec4899", emoji: "🏠" },
-];
+import { useActivities } from "@/hooks/useActivities";
 
 const STATUS = {
   to_invoice: { label: "À facturer",             color: "#f59e0b", bg: "#fef3c7", dot: "🟡" },
@@ -65,6 +58,7 @@ const inputStyle = {
 };
 
 export default function ReceivablesPage() {
+  const { activities } = useActivities();
   const [items, setItems] = useState<Receivable[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -422,7 +416,7 @@ export default function ReceivablesPage() {
                 {/* Activity */}
                 <select value={form.activity} onChange={e => setForm(f => ({ ...f, activity: e.target.value as Activity }))}
                   className="w-full px-3 py-2.5 rounded-lg text-sm outline-none" style={inputStyle}>
-                  {ACTIVITIES.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
+                  {activities.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
                 </select>
               </div>
 

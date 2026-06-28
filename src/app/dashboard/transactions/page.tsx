@@ -4,14 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
-
-const ACTIVITIES = [
-  { key: "alternance", label: "Alternance", color: "#6366f1", emoji: "🎓" },
-  { key: "cle_avenir", label: "CléAvenir",  color: "#f59e0b", emoji: "🏢" },
-  { key: "hakily",     label: "Hakily",      color: "#10b981", emoji: "🤖" },
-  { key: "personnel",  label: "Personnel",   color: "#ec4899", emoji: "🏠" },
-  { key: "freelance",  label: "Freelance",   color: "#0ea5e9", emoji: "💼" },
-];
+import { useActivities } from "@/hooks/useActivities";
 
 const CATEGORY_SUGGESTIONS = {
   income:  ["Salaire", "Freelance", "Prime", "Virement", "Remboursement", "Dividendes", "Autre"],
@@ -82,6 +75,7 @@ export default function TransactionsPage() {
   const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all");
   const [actFilter, setActFilter] = useState("all");
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const { activities } = useActivities();
 
   async function load() {
     const { data } = await supabase
@@ -165,7 +159,7 @@ export default function TransactionsPage() {
     setTxs(prev => prev.filter(t => t.id !== id));
   }
 
-  const actMap = Object.fromEntries(ACTIVITIES.map(a => [a.key, a]));
+  const actMap = Object.fromEntries(activities.map(a => [a.key, a]));
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
@@ -209,7 +203,7 @@ export default function TransactionsPage() {
             style={actFilter === "all" ? { backgroundColor: "var(--accent)", color: "#fff" } : { backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
             Tous
           </button>
-          {ACTIVITIES.map(a => (
+          {activities.map(a => (
             <button key={a.key} onClick={() => setActFilter(a.key)} className="px-3 py-1.5 rounded-lg text-xs font-medium"
               style={actFilter === a.key ? { backgroundColor: a.color, color: "#fff" } : { backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
               {a.emoji} {a.label}
@@ -300,7 +294,7 @@ export default function TransactionsPage() {
 
               {/* Activity */}
               <select value={form.activity} onChange={e => setForm(f => ({ ...f, activity: e.target.value }))} required className="w-full px-3 py-2.5 rounded-lg text-sm outline-none" style={inputStyle}>
-                {ACTIVITIES.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
+                {activities.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
               </select>
 
               {/* Amount */}

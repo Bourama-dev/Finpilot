@@ -4,14 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/client";
-
-const ACTIVITIES = [
-  { key: "alternance", label: "Alternance", color: "#6366f1", emoji: "🎓" },
-  { key: "cle_avenir", label: "CléAvenir",  color: "#f59e0b", emoji: "🏢" },
-  { key: "hakily",     label: "Hakily",      color: "#10b981", emoji: "🤖" },
-  { key: "personnel",  label: "Personnel",   color: "#ec4899", emoji: "🏠" },
-  { key: "freelance",  label: "Freelance",   color: "#0ea5e9", emoji: "💼" },
-];
+import { useActivities } from "@/hooks/useActivities";
 
 type Budget = {
   id: string;
@@ -43,6 +36,7 @@ const inputStyle = {
 const EMPTY_FORM = { activity: "personnel", category: "", amount: "", period: "monthly" };
 
 export default function BudgetsPage() {
+  const { activities } = useActivities();
   const [budgets, setBudgets] = useState<Budget[]>([]);
   const [txs, setTxs] = useState<TX[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,7 +106,7 @@ export default function BudgetsPage() {
     setBudgets(prev => prev.filter(b => b.id !== id));
   }
 
-  const actMap = Object.fromEntries(ACTIVITIES.map(a => [a.key, a]));
+  const actMap = Object.fromEntries(activities.map(a => [a.key, a]));
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
@@ -204,7 +198,7 @@ export default function BudgetsPage() {
             {formError && <p className="text-sm px-3 py-2 rounded-lg" style={{ backgroundColor: "var(--danger-light)", color: "var(--danger)" }}>{formError}</p>}
             <form onSubmit={handleSave} className="space-y-3">
               <select value={form.activity} onChange={e => setForm(f => ({ ...f, activity: e.target.value }))} className="w-full px-3 py-2.5 rounded-lg text-sm outline-none" style={inputStyle}>
-                {ACTIVITIES.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
+                {activities.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
               </select>
               <input type="text" placeholder="Catégorie (ex: Loyer, Transport…)" value={form.category}
                 onChange={e => setForm(f => ({ ...f, category: e.target.value }))} required

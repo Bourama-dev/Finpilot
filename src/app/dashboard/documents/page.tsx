@@ -4,14 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
-
-const ACTIVITIES = [
-  { key: "alternance", label: "Alternance", color: "#6366f1", emoji: "🎓" },
-  { key: "cle_avenir", label: "CléAvenir",  color: "#f59e0b", emoji: "🏢" },
-  { key: "hakily",     label: "Hakily",      color: "#10b981", emoji: "🤖" },
-  { key: "personnel",  label: "Personnel",   color: "#ec4899", emoji: "🏠" },
-  { key: "freelance",  label: "Freelance",   color: "#0ea5e9", emoji: "💼" },
-];
+import { useActivities, getActivity } from "@/hooks/useActivities";
 
 const CATEGORY_SUGGESTIONS = [
   "Loyer", "Courses", "Transport", "Abonnements", "Restaurant", "Santé",
@@ -67,6 +60,7 @@ const CONFIDENCE_STYLES: Record<string, { label: string; bg: string; color: stri
 };
 
 export default function DocumentsPage() {
+  const { activities } = useActivities();
   const [docs, setDocs] = useState<Doc[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
@@ -211,7 +205,7 @@ export default function DocumentsPage() {
   }
 
   const filtered = actFilter === "all" ? docs : docs.filter(d => d.activity === actFilter);
-  const actMap = Object.fromEntries(ACTIVITIES.map(a => [a.key, a]));
+  const actMap = Object.fromEntries(activities.map(a => [a.key, a]));
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
@@ -295,7 +289,7 @@ export default function DocumentsPage() {
               {/* Activity */}
               <select value={txActivity} onChange={e => setTxActivity(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg text-sm outline-none" style={inputStyle}>
-                {ACTIVITIES.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
+                {activities.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
               </select>
             </div>
 
@@ -360,7 +354,7 @@ export default function DocumentsPage() {
               className="px-2 py-1 rounded-lg text-xs outline-none"
               style={{ backgroundColor: "var(--bg-tertiary)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
             >
-              {ACTIVITIES.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
+              {activities.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
             </select>
           </div>
         )}
@@ -373,7 +367,7 @@ export default function DocumentsPage() {
           style={actFilter === "all" ? { backgroundColor: "var(--accent)", color: "#fff" } : { backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
           Tous ({docs.length})
         </button>
-        {ACTIVITIES.map(a => {
+        {activities.map(a => {
           const count = docs.filter(d => d.activity === a.key).length;
           if (count === 0) return null;
           return (

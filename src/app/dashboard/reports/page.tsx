@@ -4,14 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
-
-const ACTIVITIES = [
-  { key: "alternance", label: "Alternance", color: "#6366f1", emoji: "🎓" },
-  { key: "cle_avenir", label: "CléAvenir",  color: "#f59e0b", emoji: "🏢" },
-  { key: "hakily",     label: "Hakily",      color: "#10b981", emoji: "🤖" },
-  { key: "personnel",  label: "Personnel",   color: "#ec4899", emoji: "🏠" },
-  { key: "freelance",  label: "Freelance",   color: "#0ea5e9", emoji: "💼" },
-];
+import { useActivities } from "@/hooks/useActivities";
 
 type TX = {
   id: string;
@@ -42,6 +35,7 @@ function pct(part: number, total: number) {
 const MONTHS_FR = ["Jan", "Fév", "Mar", "Avr", "Mai", "Juin", "Juil", "Aoû", "Sep", "Oct", "Nov", "Déc"];
 
 export default function ReportsPage() {
+  const { activities } = useActivities();
   const [txs, setTxs] = useState<TX[]>([]);
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [loading, setLoading] = useState(true);
@@ -112,7 +106,7 @@ export default function ReportsPage() {
   );
 
   const byActivity = useMemo(() =>
-    ACTIVITIES.map(act => {
+    activities.map(act => {
       const actTxs   = txs.filter(t => t.activity === act.key);
       const txIncome = actTxs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
       const recPaid  = paidReceivables.filter(r => r.activity === act.key).reduce((s, r) => s + r.amount, 0);

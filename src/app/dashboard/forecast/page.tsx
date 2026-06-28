@@ -5,14 +5,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
-
-const ACTIVITIES: Record<string, { label: string; color: string; emoji: string }> = {
-  alternance: { label: "Alternance", color: "#6366f1", emoji: "🎓" },
-  cle_avenir: { label: "CléAvenir",  color: "#f59e0b", emoji: "🏢" },
-  hakily:     { label: "Hakily",      color: "#10b981", emoji: "🤖" },
-  personnel:  { label: "Personnel",   color: "#ec4899", emoji: "🏠" },
-  freelance:  { label: "Freelance",   color: "#0ea5e9", emoji: "💼" },
-};
+import { useActivities, getActivity } from "@/hooks/useActivities";
 
 const FREQ_LABELS: Record<string, string> = {
   daily:   "Quotidien",
@@ -92,6 +85,7 @@ function expectedPaymentMonth(r: PendingReceivable): Date {
 }
 
 export default function ForecastPage() {
+  const { activities } = useActivities();
   const [horizon, setHorizon] = useState(6);
   const [recurring, setRecurring] = useState<RecurringTx[]>([]);
   const [historical, setHistorical] = useState<HistTx[]>([]);
@@ -229,7 +223,7 @@ export default function ForecastPage() {
   // Per-activity URSSAF base (recurring + receivables, excluding history component)
   const urssafActDetails = useMemo(() =>
     Array.from(URSSAF_ACTS).map(actKey => {
-      const act = ACTIVITIES[actKey];
+      const act = getActivity(actKey, activities);
       const base = months.reduce((total, m) => {
         const recurPart = recurring
           .filter(t => t.type === "income" && t.activity === actKey)
@@ -461,7 +455,7 @@ export default function ForecastPage() {
               </div>
               <ul>
                 {receivables.map((r, i) => {
-                  const act = ACTIVITIES[r.activity];
+                  const act = getActivity(r.activity, activities);
                   const payDate = expectedPaymentMonth(r);
                   const payLabel = payDate.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
                   return (
@@ -584,7 +578,7 @@ export default function ForecastPage() {
                 ) : (
                   <ul>
                     {list.map((tx, i) => {
-                      const act = ACTIVITIES[tx.activity];
+                      const act = getActivity(tx.activity, activities);
                       const nextMonthEquiv = monthlyEquivalent(tx, new Date(new Date().getFullYear(), new Date().getMonth() + 1, 1));
                       return (
                         <li key={tx.id} className="flex items-center gap-3 px-4 py-3"

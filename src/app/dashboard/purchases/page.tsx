@@ -5,14 +5,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { Activity } from "@/types/database";
-
-const ACTIVITIES = [
-  { key: "alternance", label: "Alternance", color: "#6366f1", emoji: "🎓" },
-  { key: "cle_avenir", label: "CléAvenir",  color: "#f59e0b", emoji: "🏢" },
-  { key: "hakily",     label: "Hakily",      color: "#10b981", emoji: "🤖" },
-  { key: "personnel",  label: "Personnel",   color: "#ec4899", emoji: "🏠" },
-  { key: "freelance",  label: "Freelance",   color: "#0ea5e9", emoji: "💼" },
-];
+import { useActivities } from "@/hooks/useActivities";
 
 const CATEGORIES = [
   "Électronique", "Informatique", "Mobilier", "Électroménager",
@@ -124,6 +117,7 @@ function installmentDates(startDate: string | null, n: number): string[] {
 const ALL_STATUSES: Array<PurchaseStatus | "all"> = ["all", "planned", "in_progress", "done", "cancelled"];
 
 export default function PurchasesPage() {
+  const { activities } = useActivities();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading,   setLoading]   = useState(true);
   const [filter,    setFilter]    = useState<PurchaseStatus | "all">("all");
@@ -357,7 +351,7 @@ export default function PurchasesPage() {
       ) : (
         <div className="space-y-3">
           {visible.map(p => {
-            const act  = ACTIVITIES.find(a => a.key === p.activity);
+            const act  = activities.find(a => a.key === p.activity);
             const inst = calcInstallments(p.amount, p.payment_mode, p.installment_fees_pct, p.credit_months);
             const days = daysUntil(p.target_date);
             const prCfg  = PRIORITY_CFG[p.priority];
@@ -621,7 +615,7 @@ export default function PurchasesPage() {
                     <select value={form.activity} onChange={e => set("activity", e.target.value as Activity)}
                       className="w-full px-3 py-2.5 rounded-xl text-sm outline-none appearance-none"
                       style={{ backgroundColor: "var(--bg-tertiary)", border: "1px solid var(--border)", color: "var(--text-primary)" }}>
-                      {ACTIVITIES.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
+                      {activities.map(a => <option key={a.key} value={a.key}>{a.emoji} {a.label}</option>)}
                     </select>
                   </div>
                 </div>
