@@ -327,6 +327,10 @@ export default function ForecastPage() {
   const incomeRecurring  = recurring.filter(t => t.type === "income");
   const expenseRecurring = recurring.filter(t => t.type === "expense");
   const totalReceivableInForecast = months.reduce((s, m) => s + m.receivableIncome, 0);
+  const totalRecurIncome  = months.reduce((s, m) => s + m.recurIncome,  0);
+  const totalRecurExpense = months.reduce((s, m) => s + m.recurExpense, 0);
+  const totalHistIncomeAmt  = includeHistory ? avgHistIncome  * horizon : 0;
+  const totalHistExpenseAmt = includeHistory ? avgHistExpense * horizon : 0;
 
   return (
     <div className="space-y-5 max-w-4xl mx-auto">
@@ -375,20 +379,78 @@ export default function ForecastPage() {
         <>
           {/* KPIs */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {[
-              { label: "Revenus prévus",    value: totals.income,  color: "var(--success)" },
-              { label: "Dépenses prévues",  value: totals.expense, color: "var(--danger)"  },
-              { label: "Épargne nette",     value: totals.net,     color: totals.net >= 0 ? "var(--success)" : "var(--danger)" },
-              { label: "Créances incluses", value: totalReceivableInForecast, color: "#f59e0b" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="rounded-xl p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
-                <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>{label}</p>
-                <p className="text-base sm:text-lg font-bold tabular-nums" style={{ color, fontFamily: "var(--font-dm-mono, monospace)" }}>
-                  {value >= 0 ? "" : "−"}{fmt(Math.abs(value))}
-                </p>
-                <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>sur {horizon} mois</p>
-              </div>
-            ))}
+            {/* Revenus prévus */}
+            <div className="rounded-xl p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Revenus prévus</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums" style={{ color: "var(--success)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                <Tooltip align="left" content={
+                  <div className="p-3 space-y-0.5">
+                    <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>💰 Revenus sur {horizon} mois</p>
+                    <TRow label="🔄 Récurrents" value={fmt(totalRecurIncome)} color="var(--success)" />
+                    {includeHistory && <TRow label="📊 Moy. hist. 3 mois" value={fmt(totalHistIncomeAmt)} muted />}
+                    {totalReceivableInForecast > 0 && <TRow label="📬 Créances" value={fmt(totalReceivableInForecast)} color="#f59e0b" />}
+                    <TDivider />
+                    <TRow label="= Total" value={fmt(totals.income)} color="var(--success)" />
+                  </div>
+                }>{fmt(totals.income)}</Tooltip>
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>sur {horizon} mois</p>
+            </div>
+            {/* Dépenses prévues */}
+            <div className="rounded-xl p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Dépenses prévues</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                <Tooltip align="center" content={
+                  <div className="p-3 space-y-0.5">
+                    <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>💸 Dépenses sur {horizon} mois</p>
+                    <TRow label="🔄 Récurrents" value={fmt(totalRecurExpense)} color="var(--danger)" />
+                    {includeHistory && <TRow label="📊 Moy. hist. 3 mois" value={fmt(totalHistExpenseAmt)} muted />}
+                    <TDivider />
+                    <TRow label="= Total" value={fmt(totals.expense)} color="var(--danger)" />
+                  </div>
+                }>{fmt(totals.expense)}</Tooltip>
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>sur {horizon} mois</p>
+            </div>
+            {/* Épargne nette */}
+            <div className="rounded-xl p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Épargne nette</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums" style={{ color: totals.net >= 0 ? "var(--success)" : "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                <Tooltip align="center" content={
+                  <div className="p-3 space-y-0.5">
+                    <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📊 Net sur {horizon} mois</p>
+                    <TRow label="+ Revenus" value={fmt(totals.income)} color="var(--success)" />
+                    <TRow label="− Dépenses" value={fmt(totals.expense)} color="var(--danger)" />
+                    <TDivider />
+                    <TRow label="= Épargne nette" value={`${totals.net >= 0 ? "+" : ""}${fmt(totals.net)}`} color={totals.net >= 0 ? "var(--success)" : "var(--danger)"} />
+                    <p className="text-[9px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                      {totals.net >= 0 ? `Bilan positif sur ${horizon} mois ✓` : `Bilan déficitaire sur ${horizon} mois`}
+                    </p>
+                  </div>
+                }>{totals.net >= 0 ? "+" : "−"}{fmt(Math.abs(totals.net))}</Tooltip>
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>sur {horizon} mois</p>
+            </div>
+            {/* Créances incluses */}
+            <div className="rounded-xl p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+              <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Créances incluses</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums" style={{ color: "#f59e0b", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                <Tooltip align="right" content={
+                  <div className="p-3 space-y-0.5">
+                    <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📬 Créances à recevoir</p>
+                    {receivables.length === 0 ? (
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Aucune créance en attente</p>
+                    ) : (
+                      receivables.map((r, ri) => (
+                        <TRow key={ri} label={r.client} value={fmtFull(r.amount)} color="#f59e0b" />
+                      ))
+                    )}
+                    {receivables.length > 0 && <><TDivider /><TRow label="= Total" value={fmt(totalReceivableInForecast)} color="#f59e0b" /></>}
+                  </div>
+                }>{fmt(totalReceivableInForecast)}</Tooltip>
+              </p>
+              <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>sur {horizon} mois</p>
+            </div>
           </div>
 
           {/* Include history toggle */}
@@ -659,19 +721,52 @@ export default function ForecastPage() {
                 <div className="rounded-lg p-3 text-center" style={{ backgroundColor: "var(--bg-tertiary)" }}>
                   <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Cotisations sur {horizon} mois</p>
                   <p className="text-lg font-bold tabular-nums" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-                    {fmtFull(estimatedUrssaf)}
+                    <Tooltip align="left" content={
+                      <div className="p-3 space-y-0.5">
+                        <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>⚖️ Cotisations par activité</p>
+                        {urssafActDetails.map(a => (
+                          <TRow key={a.key} label={`${a.emoji} ${a.label}`} value={fmtFull(a.cotisations)} color="var(--danger)" />
+                        ))}
+                        {includeHistory && avgHistUrssafIncome > 0 && (
+                          <TRow label="📊 Hist. URSSAF" value={fmtFull(avgHistUrssafIncome * horizon * URSSAF_RATE)} muted />
+                        )}
+                        <TDivider />
+                        <TRow label="= Total" value={fmtFull(estimatedUrssaf)} color="var(--danger)" />
+                        <p className="text-[9px] mt-1.5" style={{ color: "var(--text-muted)" }}>Taux BNC {(URSSAF_RATE * 100).toFixed(1)} %</p>
+                      </div>
+                    }>{fmtFull(estimatedUrssaf)}</Tooltip>
                   </p>
                 </div>
                 <div className="rounded-lg p-3 text-center" style={{ backgroundColor: "var(--bg-tertiary)" }}>
                   <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Moyenne mensuelle</p>
                   <p className="text-lg font-bold tabular-nums" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-                    {fmtFull(estimatedUrssaf / horizon)}
+                    <Tooltip align="center" content={
+                      <div className="p-3 space-y-0.5">
+                        <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📅 Calcul mensuel</p>
+                        <TRow label={`Total ${horizon} mois`} value={fmtFull(estimatedUrssaf)} muted />
+                        <TRow label={`÷ ${horizon} mois`} value="" muted />
+                        <TDivider />
+                        <TRow label="= Moy./mois" value={fmtFull(estimatedUrssaf / horizon)} color="var(--danger)" />
+                      </div>
+                    }>{fmtFull(estimatedUrssaf / horizon)}</Tooltip>
                   </p>
                 </div>
                 <div className="rounded-lg p-3 text-center" style={{ backgroundColor: "var(--bg-tertiary)" }}>
                   <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>CA soumis URSSAF</p>
                   <p className="text-lg font-bold tabular-nums" style={{ color: "var(--text-primary)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-                    {fmtFull(totalUrssafBase)}
+                    <Tooltip align="right" content={
+                      <div className="p-3 space-y-0.5">
+                        <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📋 CA soumis par activité</p>
+                        {urssafActDetails.map(a => (
+                          <TRow key={a.key} label={`${a.emoji} ${a.label}`} value={fmtFull(a.base)} color="var(--text-primary)" />
+                        ))}
+                        {includeHistory && avgHistUrssafIncome > 0 && (
+                          <TRow label="📊 Hist. URSSAF" value={fmtFull(avgHistUrssafIncome * horizon)} muted />
+                        )}
+                        <TDivider />
+                        <TRow label="= CA total" value={fmtFull(totalUrssafBase)} color="var(--text-primary)" />
+                      </div>
+                    }>{fmtFull(totalUrssafBase)}</Tooltip>
                   </p>
                 </div>
               </div>
