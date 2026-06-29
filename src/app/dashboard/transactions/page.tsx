@@ -206,23 +206,13 @@ export default function TransactionsPage() {
             </div>
           ))}
         </div>
-        {/* Prévisionnel (affiché uniquement si des transactions futures existent dans la sélection) */}
         {hasPlanned && (
-          <div className="grid grid-cols-3 gap-3">
-            {[
-              { label: "Revenus prévus", value: plannedIn, color: "var(--success)" },
-              { label: "Dépenses prévues", value: plannedOut, color: "var(--danger)" },
-              { label: "Solde prévu", value: plannedIn - plannedOut, color: plannedIn >= plannedOut ? "var(--success)" : "var(--danger)" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px dashed var(--border)", opacity: 0.75 }}>
-                <p className="text-xs flex items-center justify-center gap-1" style={{ color: "var(--text-muted)" }}>
-                  <span className="text-[9px] px-1 py-0.5 rounded" style={{ backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>PRÉVU</span>
-                  {label.replace(" prévu", "").replace(" prévues", "")}
-                </p>
-                <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color, fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(value)}</p>
-              </div>
-            ))}
-          </div>
+          <p className="text-xs px-1" style={{ color: "var(--text-muted)" }}>
+            📅 {planned.length} transaction{planned.length > 1 ? "s" : ""} prévue{planned.length > 1 ? "s" : ""} ·
+            {plannedIn > 0 && <span style={{ color: "var(--success)" }}> +{fmt(plannedIn)}</span>}
+            {plannedOut > 0 && <span style={{ color: "var(--danger)" }}> −{fmt(plannedOut)}</span>}
+            <span style={{ color: plannedIn >= plannedOut ? "var(--success)" : "var(--danger)" }}> = {plannedIn >= plannedOut ? "+" : ""}{fmt(plannedIn - plannedOut)}</span>
+          </p>
         )}
       </div>
 
@@ -288,18 +278,15 @@ export default function TransactionsPage() {
               return (
                 <li key={tx.id} className="flex items-center gap-3 px-4 py-3.5 group"
                   style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined, opacity: excluded ? 0.5 : 1 }}>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 relative"
-                    style={{ backgroundColor: `${color}${isPlanned ? "10" : "1a"}`, border: isPlanned ? `1px dashed ${color}66` : undefined }}>
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0"
+                    style={{ backgroundColor: `${color}1a`, opacity: isPlanned ? 0.6 : 1 }}>
                     {act?.emoji ?? "💶"}
-                    {isPlanned && (
-                      <span className="absolute -top-1 -right-1 text-[8px] leading-none px-1 py-0.5 rounded-full font-bold text-white" style={{ backgroundColor: "var(--accent)" }}>!</span>
-                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: isPlanned ? "var(--text-secondary)" : "var(--text-primary)" }}>
+                    <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: "var(--text-primary)" }}>
                       {tx.description ?? tx.category}
                       {isPlanned && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0" style={{ backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)" }}>📅 Prévu</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0" style={{ backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)" }}>Prévu</span>
                       )}
                       {excluded && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>exclu</span>}
                     </p>
@@ -314,10 +301,10 @@ export default function TransactionsPage() {
                   </div>
                   <p className="text-sm font-bold tabular-nums shrink-0"
                     style={{
-                      color: excluded ? "var(--text-muted)" : isPlanned ? `${tx.type === "income" ? "var(--success)" : "var(--danger)"}99` : tx.type === "income" ? "var(--success)" : "var(--danger)",
+                      color: excluded ? "var(--text-muted)" : tx.type === "income" ? "var(--success)" : "var(--danger)",
                       fontFamily: "var(--font-dm-mono, monospace)",
-                      textDecoration: excluded ? "line-through" : isPlanned ? "none" : undefined,
-                      fontStyle: isPlanned ? "italic" : undefined,
+                      textDecoration: excluded ? "line-through" : undefined,
+                      opacity: isPlanned ? 0.55 : 1,
                     }}>
                     {tx.type === "income" ? "+" : "−"}{fmt(tx.amount)}
                   </p>

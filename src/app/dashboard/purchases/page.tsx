@@ -421,25 +421,7 @@ export default function PurchasesPage() {
                   {/* Amount */}
                   <div className="text-right shrink-0 ml-2">
                     <p className="text-sm font-bold tabular-nums" style={{ color: "var(--text-primary)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-                      <Tooltip align="right" content={
-                        <div className="p-3 space-y-0.5">
-                          <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>💰 {p.name}</p>
-                          <TRow label="Prix de base" value={fmt(p.amount)} muted />
-                          {p.payment_mode !== "comptant" ? (
-                            <>
-                              <TRow label={`Mode de paiement`} value={PAYMENT_MODES.find(m => m.key === p.payment_mode)?.label ?? p.payment_mode} muted />
-                              <TRow label={`${inst.n} mensualités`} value={fmt(inst.monthly) + "/mois"} color="#f59e0b" />
-                              {inst.fees > 0 && <TRow label={`Frais (${p.installment_fees_pct}%)`} value={fmt(inst.fees)} color="var(--danger)" />}
-                              <TDivider />
-                              <TRow label="Coût total" value={fmt(inst.total)} color={inst.fees > 0 ? "var(--danger)" : "var(--text-primary)"} />
-                            </>
-                          ) : (
-                            <TRow label="Paiement" value="Comptant" muted />
-                          )}
-                          <TDivider />
-                          <TRow label="Statut" value={STATUS_CFG[p.status].label} muted />
-                        </div>
-                      }>{fmt(p.amount)}</Tooltip>
+                      {fmt(p.amount)}
                     </p>
                     {p.payment_mode !== "comptant" && (
                       <p className="text-[10px] tabular-nums" style={{ color: "#f59e0b", fontFamily: "var(--font-dm-mono, monospace)" }}>

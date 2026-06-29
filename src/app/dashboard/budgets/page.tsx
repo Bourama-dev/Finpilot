@@ -184,22 +184,7 @@ export default function BudgetsPage() {
                         </div>
                       }>{fmt(spent)}</Tooltip>
                     </p>
-                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                      / <Tooltip align="right" content={
-                        <div className="p-3 space-y-0.5">
-                          <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>🎯 Budget {periodLabel}</p>
-                          <TRow label="Budget max" value={fmt(budget.amount)} muted />
-                          <TRow label="Dépensé" value={fmt(spent)} color={over ? "var(--danger)" : "var(--text-primary)"} />
-                          <TDivider />
-                          <TRow
-                            label={over ? "Dépassement" : "Restant"}
-                            value={over ? `+${fmt(spent - budget.amount)}` : fmt(budget.amount - spent)}
-                            color={over ? "var(--danger)" : "var(--success)"}
-                          />
-                          <TRow label="Utilisation" value={`${pct} %`} color={over ? "var(--danger)" : color} muted />
-                        </div>
-                      }>{fmt(budget.amount)}</Tooltip>
-                    </p>
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>/ {fmt(budget.amount)}</p>
                   </div>
 
                   <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: `${color}22` }}>
