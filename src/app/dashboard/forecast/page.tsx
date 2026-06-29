@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { useActivities, getActivity } from "@/hooks/useActivities";
@@ -12,47 +13,64 @@ function Tooltip({ children, content, align = "center" }: {
   content: React.ReactNode;
   align?: "left" | "center" | "right";
 }) {
-  const [visible, setVisible] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const ref = useRef<HTMLSpanElement>(null);
 
-  const pos =
-    align === "right"  ? { right: 0 } :
-    align === "left"   ? { left: 0 }  :
-    { left: "50%", transform: "translateX(-50%)" };
+  function show() {
+    if (!ref.current) return;
+    const r = ref.current.getBoundingClientRect();
+    const W = 236;
+    let x = r.left + r.width / 2 - W / 2;
+    if (align === "right") x = r.right - W;
+    if (align === "left")  x = r.left;
+    x = Math.max(8, Math.min(x, window.innerWidth - W - 8));
+    setPos({ x, y: r.top });
+  }
+
+  function hide() { setPos(null); }
 
   return (
-    <div ref={ref} className="relative inline-flex items-center"
-      onMouseEnter={() => setVisible(true)}
-      onMouseLeave={() => setVisible(false)}>
-      <span className="underline decoration-dotted decoration-1 cursor-default underline-offset-2"
+    <>
+      <span ref={ref} onMouseEnter={show} onMouseLeave={hide}
+        className="underline decoration-dotted decoration-1 cursor-default underline-offset-2"
         style={{ textDecorationColor: "var(--text-muted)" }}>
         {children}
       </span>
-      {visible && (
+      {pos && typeof document !== "undefined" && createPortal(
         <div
-          className="absolute z-50 bottom-full mb-2.5 w-56 rounded-2xl shadow-2xl pointer-events-none"
-          style={{ ...pos, backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", opacity: 0.97 }}>
+          className="pointer-events-none rounded-2xl shadow-2xl"
+          style={{
+            position: "fixed",
+            left: pos.x,
+            top: pos.y,
+            transform: "translateY(calc(-100% - 10px))",
+            width: 236,
+            zIndex: 9999,
+            backgroundColor: "var(--bg-secondary)",
+            border: "1px solid var(--border)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+          }}>
           {content}
-          {/* caret */}
-          <div className="absolute top-full -mt-px"
-            style={{
-              ...( align === "right" ? { right: 16 } : align === "left" ? { left: 16 } : { left: "50%", transform: "translateX(-50%)" }),
-              width: 0, height: 0,
-              borderLeft: "6px solid transparent",
-              borderRight: "6px solid transparent",
-              borderTop: "6px solid var(--border)",
-            }} />
-          <div className="absolute top-full -mt-0.5"
-            style={{
-              ...( align === "right" ? { right: 17 } : align === "left" ? { left: 17 } : { left: "50%", transform: "translateX(-50%)" }),
-              width: 0, height: 0,
-              borderLeft: "5px solid transparent",
-              borderRight: "5px solid transparent",
-              borderTop: "5px solid var(--bg-secondary)",
-            }} />
-        </div>
+          {/* Caret */}
+          <div style={{
+            position: "absolute", top: "100%", marginTop: -1,
+            ...(align === "right" ? { right: 16 } : align === "left" ? { left: 16 } : { left: "50%", transform: "translateX(-50%)" }),
+            width: 0, height: 0,
+            borderLeft: "6px solid transparent", borderRight: "6px solid transparent",
+            borderTop: "6px solid var(--border)",
+          }} />
+          <div style={{
+            position: "absolute", top: "100%", marginTop: 0,
+            ...(align === "right" ? { right: 17 } : align === "left" ? { left: 17 } : { left: "50%", transform: "translateX(-50%)" }),
+            width: 0, height: 0,
+            borderLeft: "5px solid transparent", borderRight: "5px solid transparent",
+            borderTop: "5px solid var(--bg-secondary)",
+          }} />
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
   );
 }
 
@@ -98,6 +116,7 @@ type HistTx = {
   amount: number;
   date: string;
   activity: string;
+  category: string;
 };
 
 type Receivable = {
@@ -168,7 +187,7 @@ export default function ForecastPage() {
           .eq("is_recurring", true),
         supabase
           .from("transactions")
-          .select("type, amount, date, activity")
+          .select("type, amount, date, activity, category")
           .eq("is_recurring", false)
           .gte("date", threeMonthsAgo.toISOString().slice(0, 10)),
         supabase
@@ -205,9 +224,11 @@ export default function ForecastPage() {
       r => r.status === "paid" && r.updated_at.slice(0, 10) >= cutoffStr,
     );
 
-    // Historical income = transactions + paid receivables (paid date = updated_at)
+    // Historical income = non-recurring income transactions (excluding "Créance client" which are
+    // auto-created when a receivable is paid — those are already counted via paidReceivables below)
+    // + paid receivables from last 3 months (for backward compat with pre-auto-tx receivables)
     const allHistIncome: Array<{ amount: number; activity: string }> = [
-      ...historical.filter(t => t.type === "income"),
+      ...historical.filter(t => t.type === "income" && t.category !== "Créance client"),
       ...paidReceivables.map(r => ({ amount: r.amount, activity: r.activity })),
     ];
     const histIncomeTotal = allHistIncome.reduce((s, t) => s + t.amount, 0);
@@ -380,7 +401,7 @@ export default function ForecastPage() {
               style={includeHistory ? { backgroundColor: "var(--accent)", borderColor: "var(--accent)", color: "#fff" } : { borderColor: "currentColor" }}>
               {includeHistory ? "✓" : ""}
             </span>
-            Inclure la tendance historique — moy. {fmt(avgHistIncome)}/mois revenus · {fmt(avgHistExpense)}/mois dépenses
+            Inclure la moy. historique 3 mois — {fmt(avgHistIncome)}/mois revenus · {fmt(avgHistExpense)}/mois dépenses
           </button>
 
           {/* Tabs */}
@@ -483,7 +504,7 @@ export default function ForecastPage() {
                           <div className="p-3 space-y-0.5">
                             <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>💰 Revenus — {m.label}</p>
                             <TRow label="🔄 Récurrents" value={fmt(m.recurIncome)} color="var(--success)" />
-                            {includeHistory && <TRow label="📊 Tendance moy." value={fmt(avgHistIncome)} muted />}
+                            {includeHistory && <TRow label="📊 Moy. 3 mois hist." value={fmt(avgHistIncome)} muted />}
                             {m.receivableIncome > 0 && <TRow label="📬 Créances" value={fmt(m.receivableIncome)} color="#f59e0b" />}
                             <TDivider />
                             <TRow label="= Total" value={fmt(m.income)} color="var(--success)" />
@@ -521,7 +542,7 @@ export default function ForecastPage() {
                           <div className="p-3 space-y-0.5">
                             <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>💸 Dépenses — {m.label}</p>
                             <TRow label="🔄 Récurrents" value={fmt(m.recurExpense)} color="var(--danger)" />
-                            {includeHistory && <TRow label="📊 Tendance moy." value={fmt(avgHistExpense)} muted />}
+                            {includeHistory && <TRow label="📊 Moy. 3 mois hist." value={fmt(avgHistExpense)} muted />}
                             <TDivider />
                             <TRow label="= Total" value={fmt(m.expense)} color="var(--danger)" />
                           </div>
