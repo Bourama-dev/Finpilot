@@ -2,10 +2,72 @@
 
 export const dynamic = "force-dynamic";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
 import { useActivities, getActivity } from "@/hooks/useActivities";
+
+function Tooltip({ children, content, align = "center" }: {
+  children: React.ReactNode;
+  content: React.ReactNode;
+  align?: "left" | "center" | "right";
+}) {
+  const [visible, setVisible] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  const pos =
+    align === "right"  ? { right: 0 } :
+    align === "left"   ? { left: 0 }  :
+    { left: "50%", transform: "translateX(-50%)" };
+
+  return (
+    <div ref={ref} className="relative inline-flex items-center"
+      onMouseEnter={() => setVisible(true)}
+      onMouseLeave={() => setVisible(false)}>
+      <span className="underline decoration-dotted decoration-1 cursor-default underline-offset-2"
+        style={{ textDecorationColor: "var(--text-muted)" }}>
+        {children}
+      </span>
+      {visible && (
+        <div
+          className="absolute z-50 bottom-full mb-2.5 w-56 rounded-2xl shadow-2xl pointer-events-none"
+          style={{ ...pos, backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)", backdropFilter: "blur(16px)", WebkitBackdropFilter: "blur(16px)", opacity: 0.97 }}>
+          {content}
+          {/* caret */}
+          <div className="absolute top-full -mt-px"
+            style={{
+              ...( align === "right" ? { right: 16 } : align === "left" ? { left: 16 } : { left: "50%", transform: "translateX(-50%)" }),
+              width: 0, height: 0,
+              borderLeft: "6px solid transparent",
+              borderRight: "6px solid transparent",
+              borderTop: "6px solid var(--border)",
+            }} />
+          <div className="absolute top-full -mt-0.5"
+            style={{
+              ...( align === "right" ? { right: 17 } : align === "left" ? { left: 17 } : { left: "50%", transform: "translateX(-50%)" }),
+              width: 0, height: 0,
+              borderLeft: "5px solid transparent",
+              borderRight: "5px solid transparent",
+              borderTop: "5px solid var(--bg-secondary)",
+            }} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function TRow({ label, value, color, muted }: { label: string; value: string; color?: string; muted?: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className="text-[10px]" style={{ color: muted ? "var(--text-muted)" : "var(--text-secondary)" }}>{label}</span>
+      <span className="text-[10px] font-semibold tabular-nums" style={{ color: color ?? "var(--text-primary)", fontFamily: "var(--font-dm-mono, monospace)" }}>{value}</span>
+    </div>
+  );
+}
+
+function TDivider() {
+  return <div className="my-1.5" style={{ borderTop: "1px solid var(--border)" }} />;
+}
 
 const FREQ_LABELS: Record<string, string> = {
   daily:   "Quotidien",
@@ -414,16 +476,88 @@ export default function ForecastPage() {
                   {months.map((m, i) => (
                     <tr key={i} style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}>
                       <td className="px-4 py-3 font-medium text-xs" style={{ color: "var(--text-primary)" }}>{m.label}</td>
-                      <td className="px-4 py-3 tabular-nums text-xs font-medium" style={{ color: "var(--success)", fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(m.income)}</td>
+
+                      {/* Revenus */}
+                      <td className="px-4 py-3 tabular-nums text-xs font-medium" style={{ color: "var(--success)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                        <Tooltip align="left" content={
+                          <div className="p-3 space-y-0.5">
+                            <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>💰 Revenus — {m.label}</p>
+                            <TRow label="🔄 Récurrents" value={fmt(m.recurIncome)} color="var(--success)" />
+                            {includeHistory && <TRow label="📊 Tendance moy." value={fmt(avgHistIncome)} muted />}
+                            {m.receivableIncome > 0 && <TRow label="📬 Créances" value={fmt(m.receivableIncome)} color="#f59e0b" />}
+                            <TDivider />
+                            <TRow label="= Total" value={fmt(m.income)} color="var(--success)" />
+                          </div>
+                        }>{fmt(m.income)}</Tooltip>
+                      </td>
+
+                      {/* Dont créances */}
                       <td className="px-4 py-3 tabular-nums text-xs" style={{ color: m.receivableIncome > 0 ? "#f59e0b" : "var(--text-muted)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-                        {m.receivableIncome > 0 ? fmt(m.receivableIncome) : "—"}
+                        {m.receivableIncome > 0 ? (
+                          <Tooltip align="center" content={
+                            <div className="p-3 space-y-0.5">
+                              <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📬 Créances — {m.label}</p>
+                              {m.monthReceivables.map((r, ri) => (
+                                <div key={ri}>
+                                  <TRow label={r.client} value={fmtFull(r.amount)} color="#f59e0b" />
+                                  {r.service_date && (
+                                    <p className="text-[9px] pl-0 mb-1" style={{ color: "var(--text-muted)" }}>
+                                      Prestation : {new Date(r.service_date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}
+                                      {" · "}{r.status === "invoiced" ? "Facturée" : "À facturer"}
+                                    </p>
+                                  )}
+                                </div>
+                              ))}
+                              <TDivider />
+                              <TRow label="= Total" value={fmt(m.receivableIncome)} color="#f59e0b" />
+                            </div>
+                          }>{fmt(m.receivableIncome)}</Tooltip>
+                        ) : "—"}
                       </td>
-                      <td className="px-4 py-3 tabular-nums text-xs font-medium" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(m.expense)}</td>
+
+                      {/* Dépenses */}
+                      <td className="px-4 py-3 tabular-nums text-xs font-medium" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                        <Tooltip align="center" content={
+                          <div className="p-3 space-y-0.5">
+                            <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>💸 Dépenses — {m.label}</p>
+                            <TRow label="🔄 Récurrents" value={fmt(m.recurExpense)} color="var(--danger)" />
+                            {includeHistory && <TRow label="📊 Tendance moy." value={fmt(avgHistExpense)} muted />}
+                            <TDivider />
+                            <TRow label="= Total" value={fmt(m.expense)} color="var(--danger)" />
+                          </div>
+                        }>{fmt(m.expense)}</Tooltip>
+                      </td>
+
+                      {/* Net */}
                       <td className="px-4 py-3 tabular-nums text-xs font-semibold" style={{ color: m.net >= 0 ? "var(--success)" : "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-                        {m.net >= 0 ? "+" : ""}{fmt(m.net)}
+                        <Tooltip align="right" content={
+                          <div className="p-3 space-y-0.5">
+                            <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📊 Net — {m.label}</p>
+                            <TRow label="+ Revenus" value={fmt(m.income)} color="var(--success)" />
+                            <TRow label="− Dépenses" value={fmt(m.expense)} color="var(--danger)" />
+                            <TDivider />
+                            <TRow label="= Net" value={`${m.net >= 0 ? "+" : ""}${fmt(m.net)}`} color={m.net >= 0 ? "var(--success)" : "var(--danger)"} />
+                            <p className="text-[9px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                              {m.net >= 0 ? "Mois excédentaire ✓" : "Mois déficitaire — à surveiller"}
+                            </p>
+                          </div>
+                        }>{m.net >= 0 ? "+" : ""}{fmt(m.net)}</Tooltip>
                       </td>
+
+                      {/* Cumulé */}
                       <td className="px-4 py-3 tabular-nums text-xs font-semibold" style={{ color: m.cumulative >= 0 ? "var(--success)" : "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-                        {m.cumulative >= 0 ? "+" : ""}{fmt(m.cumulative)}
+                        <Tooltip align="right" content={
+                          <div className="p-3 space-y-0.5">
+                            <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📈 Cumulé — {m.label}</p>
+                            <TRow label="Mois précédents" value={fmt(m.cumulative - m.net)} muted />
+                            <TRow label={`+ Net ${m.label}`} value={`${m.net >= 0 ? "+" : ""}${fmt(m.net)}`} color={m.net >= 0 ? "var(--success)" : "var(--danger)"} />
+                            <TDivider />
+                            <TRow label="= Cumulé" value={`${m.cumulative >= 0 ? "+" : ""}${fmt(m.cumulative)}`} color={m.cumulative >= 0 ? "var(--success)" : "var(--danger)"} />
+                            <p className="text-[9px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                              {m.cumulative >= 0 ? `+${fmt(m.cumulative)} d'épargne cumulée` : `Déficit cumulé de ${fmt(Math.abs(m.cumulative))}`}
+                            </p>
+                          </div>
+                        }>{m.cumulative >= 0 ? "+" : ""}{fmt(m.cumulative)}</Tooltip>
                       </td>
                     </tr>
                   ))}
