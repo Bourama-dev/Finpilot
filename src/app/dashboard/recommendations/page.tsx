@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
+import { useActivities } from "@/hooks/useActivities";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -135,6 +136,7 @@ function ScoreCircle({ score }: { score: number }) {
 
 export default function RecommendationsPage() {
   const [now] = useState(() => new Date());
+  const { activities } = useActivities();
   const [txs,          setTxs]          = useState<TX[]>([]);
   const [recur,        setRecur]        = useState<RecurTX[]>([]);
   const [receivables,  setReceivables]  = useState<Receivable[]>([]);
@@ -145,6 +147,14 @@ export default function RecommendationsPage() {
   const [aiLoading,    setAiLoading]    = useState(false);
   const [aiError,      setAiError]      = useState<string | null>(null);
 
+  const yearStartStr = `${now.getFullYear()}-01-01`;
+
+  const threeMAgoStr = useMemo(() => {
+    const d = new Date(now);
+    d.setMonth(d.getMonth() - 3);
+    return d.toISOString().slice(0, 10);
+  }, [now]);
+
   const currentMonthPrefix = useMemo(() => {
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, "0");
@@ -153,8 +163,11 @@ export default function RecommendationsPage() {
 
   useEffect(() => {
     async function load() {
+      // Load from the earlier of Jan 1 (for YTD CA) and 3 months ago (for averages)
+      const startOfYear = new Date(now.getFullYear(), 0, 1);
       const threeMonthsAgo = new Date(now);
       threeMonthsAgo.setMonth(threeMonthsAgo.getMonth() - 3);
+      const queryStart = new Date(Math.min(startOfYear.getTime(), threeMonthsAgo.getTime()));
 
       const [{ data: txData }, { data: recurData }, { data: recvData }, { data: purchData }, { data: budgetData }] =
         await Promise.all([
@@ -162,12 +175,14 @@ export default function RecommendationsPage() {
             .from("transactions")
             .select("id, type, amount, category, date, activity")
             .eq("is_recurring", false)
-            .gte("date", threeMonthsAgo.toISOString().slice(0, 10))
+            .eq("excluded_from_totals", false)
+            .gte("date", queryStart.toISOString().slice(0, 10))
             .order("date"),
           supabase
             .from("transactions")
             .select("type, amount, category, activity, recurring_frequency, date")
-            .eq("is_recurring", true),
+            .eq("is_recurring", true)
+            .eq("excluded_from_totals", false),
           supabase
             .from("receivables")
             .select("id, client, amount, status, activity, service_date, created_at"),
@@ -196,61 +211,67 @@ export default function RecommendationsPage() {
 
   const stats = useMemo(() => {
     const currentTxs = txs.filter(t => t.date.startsWith(currentMonthPrefix));
+    const last3mTxs  = txs.filter(t => t.date >= threeMAgoStr);
 
-    // Monthly recurring (approximate monthly equivalent)
     const recurMonthIncome  = recur.filter(t => t.type === "income"  && t.recurring_frequency === "monthly").reduce((s, t) => s + t.amount, 0);
     const recurMonthExpense = recur.filter(t => t.type === "expense" && t.recurring_frequency === "monthly").reduce((s, t) => s + t.amount, 0);
 
     const currentIncome  = currentTxs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0) + recurMonthIncome;
     const currentExpense = currentTxs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0) + recurMonthExpense;
 
-    // 3-month averages (non-recurring)
-    const inc3m = txs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0) / 3 + recurMonthIncome;
-    const exp3m = txs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0) / 3 + recurMonthExpense;
+    // 3-month averages use only last3mTxs
+    const inc3m = last3mTxs.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0) / 3 + recurMonthIncome;
+    const exp3m = last3mTxs.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0) / 3 + recurMonthExpense;
     const savingsRate = inc3m > 0 ? (inc3m - exp3m) / inc3m : 0;
 
-    // URSSAF estimate
     const recurUrssafIncome = recur
       .filter(t => t.type === "income" && t.recurring_frequency === "monthly" && URSSAF_ACTS.has(t.activity))
       .reduce((s, t) => s + t.amount, 0);
-    const urssafMonthly    = recurUrssafIncome * URSSAF_RATE;
-    const urssafQuarterly  = urssafMonthly * 3;
+    const urssafMonthly   = recurUrssafIncome * URSSAF_RATE;
+    const urssafQuarterly = urssafMonthly * 3;
 
-    // Top expenses this month
     const expByCat: Record<string, number> = {};
     currentTxs.filter(t => t.type === "expense").forEach(t => {
       expByCat[t.category] = (expByCat[t.category] ?? 0) + t.amount;
     });
     const topExpenses = Object.entries(expByCat).sort((a, b) => b[1] - a[1]).slice(0, 5);
 
-    // Budget overruns
     const overruns = budgets
       .map(b => ({ ...b, actual: expByCat[b.category] ?? 0 }))
       .filter(b => b.actual > b.amount)
       .map(b => ({ ...b, overrun: b.actual - b.amount }));
 
-    // Receivables
     const pending    = receivables.filter(r => r.status !== "paid");
     const paid       = receivables.filter(r => r.status === "paid");
     const toInvoice  = pending.filter(r => r.status === "to_invoice");
-    const oldPending = pending.filter(r => {
-      const ref = r.service_date ?? r.created_at;
-      return daysSince(ref) > 45;
-    });
+    const oldPending = pending.filter(r => daysSince(r.service_date ?? r.created_at) > 45);
+
+    // Per-activity breakdown: current month income/expense + YTD CA
+    const byActivity: Record<string, { incCurrent: number; expCurrent: number; caYtd: number }> = {};
+    for (const act of activities) {
+      const actCurrent = currentTxs.filter(t => t.activity === act.key);
+      byActivity[act.key] = {
+        incCurrent: actCurrent.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0),
+        expCurrent: actCurrent.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0),
+        caYtd: txs
+          .filter(t => t.activity === act.key && t.type === "income" && t.date >= yearStartStr)
+          .reduce((s, t) => s + t.amount, 0),
+      };
+    }
 
     return {
       currentIncome, currentExpense,
       currentNet: currentIncome - currentExpense,
       inc3m, exp3m, savingsRate,
       urssafMonthly, urssafQuarterly, recurUrssafIncome,
-      topExpenses,
-      overruns,
+      topExpenses, overruns,
       pending, paid, toInvoice, oldPending,
       totalPending: pending.reduce((s, r) => s + r.amount, 0),
       totalPaid:    paid.reduce((s, r)    => s + r.amount, 0),
       budgetTotal:  budgets.length,
+      byActivity,
     };
-  }, [txs, recur, receivables, budgets, currentMonthPrefix]);
+  }, [txs, recur, receivables, budgets, currentMonthPrefix, activities, threeMAgoStr, yearStartStr]);
 
   // ── Health score ───────────────────────────────────────────────────────────
 
@@ -364,6 +385,25 @@ export default function RecommendationsPage() {
       });
     }
 
+    // Cross-activity transfer: entrepreneurial surplus → personal deficit
+    const entrepActs = activities.filter(a => URSSAF_ACTS.has(a.key));
+    const personalAct = activities.find(a => a.key === "personnel");
+    const enterpriseSurplus = entrepActs.reduce((s, a) => {
+      const ba = stats.byActivity[a.key];
+      return s + Math.max(0, ba ? ba.incCurrent - ba.expCurrent : 0);
+    }, 0);
+    const personalNet = personalAct
+      ? (stats.byActivity[personalAct.key]?.incCurrent ?? 0) - (stats.byActivity[personalAct.key]?.expCurrent ?? 0)
+      : 0;
+    if (enterpriseSurplus > 500 && personalNet < -200) {
+      const suggestedTransfer = Math.round(Math.min(enterpriseSurplus * 0.5, Math.abs(personalNet)));
+      list.push({
+        id: "cross-transfer", impact: "high", icon: "↔️",
+        title: "Virer des fonds vers votre compte personnel",
+        description: `Excédent de ${fmt(enterpriseSurplus)} sur vos activités pro — compte personnel en déficit de ${fmt(Math.abs(personalNet))}. Un virement de ${fmt(suggestedTransfer)} rééquilibrerait votre situation.`,
+      });
+    }
+
     const sr = stats.savingsRate;
     if (sr >= 0.25) {
       list.push({
@@ -401,7 +441,7 @@ export default function RecommendationsPage() {
 
     const sortOrder: Record<"high" | "medium" | "low", number> = { high: 0, medium: 1, low: 2 };
     return list.sort((a, b) => sortOrder[a.impact] - sortOrder[b.impact]);
-  }, [stats, purchases]);
+  }, [stats, purchases, activities]);
 
   // ── AI context ─────────────────────────────────────────────────────────────
 
@@ -414,6 +454,20 @@ export default function RecommendationsPage() {
     revenu_moyen_3m: Math.round(stats.inc3m),
     depense_moyenne_3m: Math.round(stats.exp3m),
     taux_epargne_3m_pct: Math.round(stats.savingsRate * 100),
+    par_activite: activities
+      .map(act => {
+        const ba = stats.byActivity[act.key] ?? { incCurrent: 0, expCurrent: 0, caYtd: 0 };
+        const net = ba.incCurrent - ba.expCurrent;
+        return {
+          activite: act.label,
+          type: URSSAF_ACTS.has(act.key) ? "entrepreneuriale" : "personnel",
+          revenus_mois: Math.round(ba.incCurrent),
+          depenses_mois: Math.round(ba.expCurrent),
+          solde_mois: Math.round(net),
+          ...(URSSAF_ACTS.has(act.key) ? { ca_annee: Math.round(ba.caYtd) } : {}),
+        };
+      })
+      .filter(a => a.revenus_mois > 0 || a.depenses_mois > 0),
     creances_en_attente: stats.pending.map(r => ({
       client: r.client,
       montant: r.amount,
@@ -424,7 +478,7 @@ export default function RecommendationsPage() {
     achats_planifies: purchases.map(p => ({ nom: p.name, montant: Math.round(p.amount), priorite: p.priority })),
     urssaf_mensuel_estime: Math.round(stats.urssafMonthly),
     budgets_depasses: stats.overruns.map(b => ({ categorie: b.category, depassement: Math.round(b.overrun) })),
-  }), [stats, purchases, health, now]);
+  }), [stats, purchases, health, now, activities]);
 
   const callAI = useCallback(async () => {
     setAiLoading(true);
@@ -454,6 +508,10 @@ export default function RecommendationsPage() {
   }
 
   const monthLabel = now.toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const hasActivityData = activities.some(a => {
+    const ba = stats.byActivity[a.key];
+    return ba && (ba.incCurrent > 0 || ba.expCurrent > 0);
+  });
 
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
@@ -510,6 +568,68 @@ export default function RecommendationsPage() {
           </div>
         ))}
       </div>
+
+      {/* Per-activity breakdown */}
+      {hasActivityData && (
+        <div className="space-y-3">
+          <h2 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>
+            📊 Par activité — {monthLabel}
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {activities.map(act => {
+              const ba = stats.byActivity[act.key];
+              if (!ba || (ba.incCurrent === 0 && ba.expCurrent === 0)) return null;
+              const net = ba.incCurrent - ba.expCurrent;
+              const isEntrepreneurial = URSSAF_ACTS.has(act.key);
+              return (
+                <div key={act.key} className="rounded-xl p-4 space-y-3"
+                  style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+                  <div className="flex items-center gap-2">
+                    <span className="text-lg">{act.emoji}</span>
+                    <div>
+                      <p className="text-sm font-semibold" style={{ color: "var(--text-primary)" }}>{act.label}</p>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>
+                        {isEntrepreneurial ? "Activité entrepreneuriale" : "Personnel"}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 text-center">
+                    <div>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Revenus</p>
+                      <p className="text-sm font-bold tabular-nums" style={{ color: "var(--success)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                        {fmt(ba.incCurrent)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Dépenses</p>
+                      <p className="text-sm font-bold tabular-nums" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                        {fmt(ba.expCurrent)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Solde</p>
+                      <p className="text-sm font-bold tabular-nums"
+                        style={{ color: net >= 0 ? "var(--success)" : "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                        {net >= 0 ? "+" : ""}{fmt(net)}
+                      </p>
+                    </div>
+                  </div>
+                  {isEntrepreneurial && ba.caYtd > 0 && (
+                    <div className="flex items-center justify-between pt-2"
+                      style={{ borderTop: "1px solid var(--border)" }}>
+                      <p className="text-xs" style={{ color: "var(--text-muted)" }}>CA {now.getFullYear()} (cumulé)</p>
+                      <p className="text-sm font-bold tabular-nums"
+                        style={{ color: act.color ?? "var(--accent)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                        {fmt(ba.caYtd)}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Alerts */}
       <div className="space-y-3">
@@ -581,7 +701,7 @@ export default function RecommendationsPage() {
           <div>
             <h2 className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>🤖 Conseiller IA</h2>
             <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-              Analyse approfondie et conseils personnalisés par GPT-4o
+              Analyse multi-activités — freelance, agence IA, personnel — et conseils de répartition
             </p>
           </div>
           <button onClick={callAI} disabled={aiLoading}
@@ -601,8 +721,8 @@ export default function RecommendationsPage() {
         {!aiAdvice && !aiLoading && !aiError && (
           <p className="text-sm" style={{ color: "var(--text-muted)" }}>
             Cliquez sur &quot;Analyser ma situation&quot; pour obtenir une analyse personnalisée :
-            opportunités d&apos;optimisation, conseils adaptés au régime micro-entrepreneur, et
-            recommandations sur la gestion de votre trésorerie.
+            répartition optimale entre vos activités, conseils sur le régime micro-entrepreneur,
+            et recommandations de transferts entre comptes si nécessaire.
           </p>
         )}
 
