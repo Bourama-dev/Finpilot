@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useActivities } from "@/hooks/useActivities";
+import { Tooltip, TRow, TDivider } from "@/components/ui/Tooltip";
 
 type TX = {
   id: string;
@@ -169,24 +170,82 @@ export default function ReportsPage() {
         <>
           {/* KPI Row */}
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-            {/* Revenus (avec sous-titre si des créances payées sont incluses) */}
+            {/* Revenus */}
             <div className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
               <p className="text-xs" style={{ color: "var(--text-muted)" }}>Revenus</p>
-              <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color: "var(--success)", fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(totals.income)}</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color: "var(--success)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                <Tooltip align="left" content={
+                  <div className="p-3 space-y-0.5">
+                    <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📈 Revenus {year}</p>
+                    <TRow label="🏦 Transactions" value={fmt(totals.income - totals.fromReceivables)} color="var(--success)" />
+                    {totals.fromReceivables > 0 && <TRow label="📬 Créances payées" value={fmt(totals.fromReceivables)} color="var(--success)" />}
+                    {totals.fromReceivables > 0 && <><TDivider /><TRow label="= Total" value={fmt(totals.income)} color="var(--success)" /></>}
+                  </div>
+                }>{fmt(totals.income)}</Tooltip>
+              </p>
               {totals.fromReceivables > 0 && (
                 <p className="text-[10px] mt-0.5" style={{ color: "var(--success)", opacity: 0.7 }}>dont {fmt(totals.fromReceivables)} créances</p>
               )}
             </div>
-            {[
-              { label: "Dépenses",      value: totals.expense,                   color: "var(--danger)"  },
-              { label: "Épargne nette", value: totals.income - totals.expense,   color: totals.income >= totals.expense ? "var(--success)" : "var(--danger)" },
-              { label: "À percevoir",   value: totalReceivable,                  color: "#f59e0b" },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
-                <p className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</p>
-                <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color, fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(value)}</p>
-              </div>
-            ))}
+            {/* Dépenses */}
+            <div className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>Dépenses</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                <Tooltip align="center" content={
+                  <div className="p-3 space-y-0.5">
+                    <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📉 Dépenses {year}</p>
+                    {byActivity.filter(a => a.expense > 0).map(a => (
+                      <TRow key={a.key} label={`${a.emoji} ${a.label}`} value={fmt(a.expense)} color="var(--danger)" />
+                    ))}
+                    {byActivity.filter(a => a.expense > 0).length > 1 && (
+                      <><TDivider /><TRow label="= Total" value={fmt(totals.expense)} color="var(--danger)" /></>
+                    )}
+                  </div>
+                }>{fmt(totals.expense)}</Tooltip>
+              </p>
+            </div>
+            {/* Épargne nette */}
+            {(() => {
+              const net = totals.income - totals.expense;
+              const netColor = net >= 0 ? "var(--success)" : "var(--danger)";
+              const savRate = totals.income > 0 ? Math.round((net / totals.income) * 100) : 0;
+              return (
+                <div className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+                  <p className="text-xs" style={{ color: "var(--text-muted)" }}>Épargne nette</p>
+                  <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color: netColor, fontFamily: "var(--font-dm-mono, monospace)" }}>
+                    <Tooltip align="center" content={
+                      <div className="p-3 space-y-0.5">
+                        <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📊 Net {year}</p>
+                        <TRow label="+ Revenus" value={fmt(totals.income)} color="var(--success)" />
+                        <TRow label="− Dépenses" value={fmt(totals.expense)} color="var(--danger)" />
+                        <TDivider />
+                        <TRow label="= Net" value={`${net >= 0 ? "+" : ""}${fmt(net)}`} color={netColor} />
+                        <TRow label="Taux d'épargne" value={`${savRate} %`} color={savRate >= 20 ? "var(--success)" : savRate >= 0 ? "#f59e0b" : "var(--danger)"} muted />
+                      </div>
+                    }>{fmt(net)}</Tooltip>
+                  </p>
+                </div>
+              );
+            })()}
+            {/* À percevoir */}
+            <div className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>À percevoir</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color: "#f59e0b", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                <Tooltip align="right" content={
+                  <div className="p-3 space-y-0.5">
+                    <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📬 Créances en attente</p>
+                    {receivablesByClient.length === 0 ? (
+                      <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Aucune créance</p>
+                    ) : (
+                      receivablesByClient.map(([client, amount]) => (
+                        <TRow key={client} label={client} value={fmt(amount)} color="#f59e0b" />
+                      ))
+                    )}
+                    {receivablesByClient.length > 1 && <><TDivider /><TRow label="= Total" value={fmt(totalReceivable)} color="#f59e0b" /></>}
+                  </div>
+                }>{fmt(totalReceivable)}</Tooltip>
+              </p>
+            </div>
           </div>
 
           {/* Monthly bar chart */}
@@ -235,7 +294,18 @@ export default function ReportsPage() {
                         </span>
                       )}
                       <span className="text-xs font-semibold tabular-nums" style={{ color: act.balance >= 0 ? "var(--success)" : "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-                        {act.balance >= 0 ? "+" : "−"}{fmt(Math.abs(act.balance))}
+                        <Tooltip align="right" content={
+                          <div className="p-3 space-y-0.5">
+                            <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>{act.emoji} {act.label} — {year}</p>
+                            <TRow label="+ Revenus" value={fmt(act.income)} color="var(--success)" />
+                            <TRow label="− Dépenses" value={fmt(act.expense)} color="var(--danger)" />
+                            {act.pending > 0 && <TRow label="📬 À percevoir" value={fmt(act.pending)} color="#f59e0b" />}
+                            <TDivider />
+                            <TRow label="= Net" value={`${act.balance >= 0 ? "+" : ""}${fmt(act.balance)}`} color={act.balance >= 0 ? "var(--success)" : "var(--danger)"} />
+                          </div>
+                        }>
+                          {act.balance >= 0 ? "+" : "−"}{fmt(Math.abs(act.balance))}
+                        </Tooltip>
                       </span>
                     </div>
                   </div>

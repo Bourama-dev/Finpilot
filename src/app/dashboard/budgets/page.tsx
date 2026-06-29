@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useActivities } from "@/hooks/useActivities";
+import { Tooltip, TRow, TDivider } from "@/components/ui/Tooltip";
 
 type Budget = {
   id: string;
@@ -68,6 +69,10 @@ export default function BudgetsPage() {
     return txs
       .filter(t => t.activity === budget.activity && t.category === budget.category)
       .reduce((s, t) => s + t.amount, 0);
+  }
+
+  function getSpentTxs(budget: Budget) {
+    return txs.filter(t => t.activity === budget.activity && t.category === budget.category);
   }
 
   async function handleSave(e: React.FormEvent) {
@@ -142,8 +147,10 @@ export default function BudgetsPage() {
             const act = actMap[budget.activity];
             const color = act?.color ?? "#888";
             const spent = getSpent(budget);
+            const spentTxs = getSpentTxs(budget);
             const pct = Math.min(100, Math.round((spent / budget.amount) * 100));
             const over = spent > budget.amount;
+            const periodLabel = budget.period === "monthly" ? "Mensuel" : budget.period === "quarterly" ? "Trimestriel" : "Annuel";
             return (
               <div key={budget.id} className="rounded-xl p-5 space-y-4" style={{ backgroundColor: "var(--bg-secondary)", border: `1px solid ${over ? "var(--danger)" : "var(--border)"}` }}>
                 <div className="flex items-start justify-between gap-2">
@@ -153,7 +160,7 @@ export default function BudgetsPage() {
                       <p className="font-semibold text-sm" style={{ color: "var(--text-primary)" }}>{budget.category}</p>
                     </div>
                     <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                      {act?.label ?? budget.activity} · {budget.period === "monthly" ? "Mensuel" : budget.period === "quarterly" ? "Trimestriel" : "Annuel"}
+                      {act?.label ?? budget.activity} · {periodLabel}
                     </p>
                   </div>
                   <button onClick={() => handleDelete(budget.id)} className="p-1.5 rounded-lg hover:opacity-70 text-xs" style={{ color: "var(--danger)" }}>🗑</button>
@@ -162,9 +169,36 @@ export default function BudgetsPage() {
                 <div className="space-y-2">
                   <div className="flex items-end justify-between">
                     <p className="text-2xl font-bold tabular-nums" style={{ color: over ? "var(--danger)" : "var(--text-primary)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-                      {fmt(spent)}
+                      <Tooltip align="left" content={
+                        <div className="p-3 space-y-0.5">
+                          <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📊 {budget.category} — {act?.label}</p>
+                          {spentTxs.length === 0 ? (
+                            <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Aucune dépense ce mois</p>
+                          ) : (
+                            spentTxs.map((t, i) => (
+                              <TRow key={i} label={new Date(t.date).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })} value={fmt(t.amount)} color="var(--danger)" />
+                            ))
+                          )}
+                          {spentTxs.length > 1 && <><TDivider /><TRow label="= Total dépensé" value={fmt(spent)} color={over ? "var(--danger)" : "var(--text-primary)"} /></>}
+                        </div>
+                      }>{fmt(spent)}</Tooltip>
                     </p>
-                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>/ {fmt(budget.amount)}</p>
+                    <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                      / <Tooltip align="right" content={
+                        <div className="p-3 space-y-0.5">
+                          <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>🎯 Budget {periodLabel}</p>
+                          <TRow label="Budget max" value={fmt(budget.amount)} muted />
+                          <TRow label="Dépensé" value={fmt(spent)} color={over ? "var(--danger)" : "var(--text-primary)"} />
+                          <TDivider />
+                          <TRow
+                            label={over ? "Dépassement" : "Restant"}
+                            value={over ? `+${fmt(spent - budget.amount)}` : fmt(budget.amount - spent)}
+                            color={over ? "var(--danger)" : "var(--success)"}
+                          />
+                          <TRow label="Utilisation" value={`${pct} %`} color={over ? "var(--danger)" : color} muted />
+                        </div>
+                      }>{fmt(budget.amount)}</Tooltip>
+                    </p>
                   </div>
 
                   <div className="h-2 rounded-full overflow-hidden" style={{ backgroundColor: `${color}22` }}>

@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { supabase } from "@/lib/supabase/client";
+import { Tooltip, TRow, TDivider } from "@/components/ui/Tooltip";
 
 const activityColors: Record<string, string> = {
   alternance: "#6366f1",
@@ -32,18 +33,25 @@ type Transaction = {
   category: string;
 };
 
+const fmt = (n: number) =>
+  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
+
 function KPICard({
   title,
   value,
   subtitle,
   icon,
   accent,
+  tooltipContent,
+  tooltipAlign,
 }: {
   title: string;
   value: string;
   subtitle: string;
   icon: string;
   accent: string;
+  tooltipContent?: React.ReactNode;
+  tooltipAlign?: "left" | "center" | "right";
 }) {
   return (
     <div
@@ -69,7 +77,9 @@ function KPICard({
         className="text-xl sm:text-2xl font-bold tabular-nums"
         style={{ color: "var(--text-primary)", fontFamily: "var(--font-dm-mono, monospace)" }}
       >
-        {value}
+        {tooltipContent ? (
+          <Tooltip align={tooltipAlign ?? "center"} content={tooltipContent}>{value}</Tooltip>
+        ) : value}
       </p>
       <p className="text-xs" style={{ color: "var(--text-muted)" }}>
         {subtitle}
@@ -77,9 +87,6 @@ function KPICard({
     </div>
   );
 }
-
-const fmt = (n: number) =>
-  new Intl.NumberFormat("fr-FR", { style: "currency", currency: "EUR" }).format(n);
 
 export default function DashboardPage() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -125,6 +132,17 @@ export default function DashboardPage() {
       ? Math.round(((totalIncome - totalExpenses) / totalIncome) * 100)
       : 0;
 
+  // Per-activity breakdown for tooltips
+  const incomeByActivity = Object.entries(activityLabels).map(([key, label]) => ({
+    key, label, color: activityColors[key],
+    amount: thisMonth.filter(t => t.type === "income" && t.activity === key).reduce((s, t) => s + t.amount, 0),
+  })).filter(a => a.amount > 0);
+
+  const expenseByActivity = Object.entries(activityLabels).map(([key, label]) => ({
+    key, label, color: activityColors[key],
+    amount: thisMonth.filter(t => t.type === "expense" && t.activity === key).reduce((s, t) => s + t.amount, 0),
+  })).filter(a => a.amount > 0);
+
   const greeting = () => {
     const h = new Date().getHours();
     if (h < 12) return "Bonjour";
@@ -137,6 +155,8 @@ export default function DashboardPage() {
     day: "numeric",
     month: "long",
   });
+
+  const monthLabel = new Date().toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 
   return (
     <div className="space-y-5 sm:space-y-6 max-w-5xl mx-auto">
@@ -172,6 +192,16 @@ export default function DashboardPage() {
           subtitle="Revenus – Dépenses"
           icon="💰"
           accent="#4F46E5"
+          tooltipAlign="left"
+          tooltipContent={
+            <div className="p-3 space-y-0.5">
+              <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>💰 Solde — {monthLabel}</p>
+              <TRow label="+ Revenus" value={fmt(totalIncome)} color="var(--success)" />
+              <TRow label="− Dépenses" value={fmt(totalExpenses)} color="var(--danger)" />
+              <TDivider />
+              <TRow label="= Solde" value={`${balance >= 0 ? "+" : ""}${fmt(balance)}`} color={balance >= 0 ? "var(--success)" : "var(--danger)"} />
+            </div>
+          }
         />
         <KPICard
           title="Revenus"
@@ -179,6 +209,20 @@ export default function DashboardPage() {
           subtitle="Ce mois-ci"
           icon="📈"
           accent="#10b981"
+          tooltipAlign="center"
+          tooltipContent={
+            <div className="p-3 space-y-0.5">
+              <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📈 Revenus — {monthLabel}</p>
+              {incomeByActivity.length > 0 ? (
+                incomeByActivity.map(a => (
+                  <TRow key={a.key} label={a.label} value={fmt(a.amount)} color="var(--success)" />
+                ))
+              ) : (
+                <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Aucun revenu ce mois</p>
+              )}
+              {incomeByActivity.length > 1 && <><TDivider /><TRow label="= Total" value={fmt(totalIncome)} color="var(--success)" /></>}
+            </div>
+          }
         />
         <KPICard
           title="Dépenses"
@@ -186,6 +230,20 @@ export default function DashboardPage() {
           subtitle="Ce mois-ci"
           icon="📉"
           accent="#ef4444"
+          tooltipAlign="center"
+          tooltipContent={
+            <div className="p-3 space-y-0.5">
+              <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📉 Dépenses — {monthLabel}</p>
+              {expenseByActivity.length > 0 ? (
+                expenseByActivity.map(a => (
+                  <TRow key={a.key} label={a.label} value={fmt(a.amount)} color="var(--danger)" />
+                ))
+              ) : (
+                <p className="text-[10px]" style={{ color: "var(--text-muted)" }}>Aucune dépense ce mois</p>
+              )}
+              {expenseByActivity.length > 1 && <><TDivider /><TRow label="= Total" value={fmt(totalExpenses)} color="var(--danger)" /></>}
+            </div>
+          }
         />
         <KPICard
           title="Taux d'épargne"
@@ -193,6 +251,20 @@ export default function DashboardPage() {
           subtitle="Ce mois-ci"
           icon="🎯"
           accent="#f59e0b"
+          tooltipAlign="right"
+          tooltipContent={
+            <div className="p-3 space-y-0.5">
+              <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>🎯 Taux d'épargne</p>
+              <TRow label="Revenus" value={fmt(totalIncome)} color="var(--success)" />
+              <TRow label="Dépenses" value={fmt(totalExpenses)} color="var(--danger)" />
+              <TRow label="Épargne" value={fmt(balance)} muted />
+              <TDivider />
+              <TRow label="= Taux" value={`${savingsRate} %`} color={savingsRate >= 20 ? "var(--success)" : savingsRate >= 0 ? "#f59e0b" : "var(--danger)"} />
+              <p className="text-[9px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                {savingsRate >= 20 ? "Excellent taux d'épargne ✓" : savingsRate >= 10 ? "Taux correct" : savingsRate >= 0 ? "Taux à améliorer" : "Mois déficitaire"}
+              </p>
+            </div>
+          }
         />
       </div>
 
@@ -232,7 +304,20 @@ export default function DashboardPage() {
                       fontFamily: "var(--font-dm-mono, monospace)",
                     }}
                   >
-                    {net >= 0 ? "+" : ""}{fmt(net)}
+                    <Tooltip align="center" content={
+                      <div className="p-3 space-y-0.5">
+                        <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>{label}</p>
+                        <TRow label="+ Revenus" value={fmt(inc)} color="var(--success)" />
+                        <TRow label="− Dépenses" value={fmt(exp)} color="var(--danger)" />
+                        <TDivider />
+                        <TRow label="= Net" value={`${net >= 0 ? "+" : ""}${fmt(net)}`} color={net >= 0 ? "var(--success)" : "var(--danger)"} />
+                        <p className="text-[9px] mt-1.5" style={{ color: "var(--text-muted)" }}>
+                          {actTx.length} transaction{actTx.length !== 1 ? "s" : ""} récentes
+                        </p>
+                      </div>
+                    }>
+                      {net >= 0 ? "+" : ""}{fmt(net)}
+                    </Tooltip>
                   </p>
                   <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
                     {actTx.length} transaction{actTx.length !== 1 ? "s" : ""}
@@ -332,7 +417,19 @@ export default function DashboardPage() {
                       fontFamily: "var(--font-dm-mono, monospace)",
                     }}
                   >
-                    {tx.type === "income" ? "+" : "−"}{fmt(tx.amount)}
+                    <Tooltip align="right" content={
+                      <div className="p-3 space-y-0.5">
+                        <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>
+                          {tx.type === "income" ? "📈" : "📉"} {tx.description ?? tx.category}
+                        </p>
+                        <TRow label="Montant" value={fmt(tx.amount)} color={tx.type === "income" ? "var(--success)" : "var(--danger)"} />
+                        <TRow label="Catégorie" value={tx.category} muted />
+                        {actLabel && <TRow label="Activité" value={actLabel} muted />}
+                        <TRow label="Date" value={new Date(tx.date).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })} muted />
+                      </div>
+                    }>
+                      {tx.type === "income" ? "+" : "−"}{fmt(tx.amount)}
+                    </Tooltip>
                   </p>
                 </li>
               );

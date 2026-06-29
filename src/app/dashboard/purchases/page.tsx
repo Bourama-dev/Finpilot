@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo } from "react";
 import { supabase } from "@/lib/supabase/client";
 import type { Activity } from "@/types/database";
 import { useActivities } from "@/hooks/useActivities";
+import { Tooltip, TRow, TDivider } from "@/components/ui/Tooltip";
 
 const CATEGORIES = [
   "Électronique", "Informatique", "Mobilier", "Électroménager",
@@ -286,12 +287,35 @@ export default function PurchasesPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         <div className="rounded-xl p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
           <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Total planifié</p>
-          <p className="text-lg font-bold tabular-nums" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(kpis.totalPlanned)}</p>
+          <p className="text-lg font-bold tabular-nums" style={{ color: "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+            <Tooltip align="left" content={
+              <div className="p-3 space-y-0.5">
+                <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>🛒 Achats actifs</p>
+                {purchases.filter(p => p.status !== "done" && p.status !== "cancelled").map(p => {
+                  const { total } = calcInstallments(p.amount, p.payment_mode, p.installment_fees_pct, p.credit_months);
+                  return <TRow key={p.id} label={p.name} value={fmt(total)} />;
+                })}
+                {kpis.activeCount > 1 && <><TDivider /><TRow label="= Total" value={fmt(kpis.totalPlanned)} color="var(--danger)" /></>}
+              </div>
+            }>{fmt(kpis.totalPlanned)}</Tooltip>
+          </p>
         </div>
         <div className="rounded-xl p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
           <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Charge mensuelle</p>
           <p className="text-lg font-bold tabular-nums" style={{ color: kpis.monthlyCommit > 0 ? "#f59e0b" : "var(--text-muted)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-            {kpis.monthlyCommit > 0 ? fmt(kpis.monthlyCommit) : "—"}
+            {kpis.monthlyCommit > 0 ? (
+              <Tooltip align="left" content={
+                <div className="p-3 space-y-0.5">
+                  <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>📅 Mensualités en cours</p>
+                  {purchases.filter(p => p.status === "in_progress" && p.payment_mode !== "comptant").map(p => {
+                    const { monthly } = calcInstallments(p.amount, p.payment_mode, p.installment_fees_pct, p.credit_months);
+                    return <TRow key={p.id} label={p.name} value={fmt(monthly) + "/mois"} color="#f59e0b" />;
+                  })}
+                  <TDivider />
+                  <TRow label="= Charge mensuelle" value={fmt(kpis.monthlyCommit)} color="#f59e0b" />
+                </div>
+              }>{fmt(kpis.monthlyCommit)}</Tooltip>
+            ) : "—"}
           </p>
         </div>
         <div className="rounded-xl p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
@@ -397,7 +421,25 @@ export default function PurchasesPage() {
                   {/* Amount */}
                   <div className="text-right shrink-0 ml-2">
                     <p className="text-sm font-bold tabular-nums" style={{ color: "var(--text-primary)", fontFamily: "var(--font-dm-mono, monospace)" }}>
-                      {fmt(p.amount)}
+                      <Tooltip align="right" content={
+                        <div className="p-3 space-y-0.5">
+                          <p className="text-[10px] font-bold mb-2" style={{ color: "var(--text-primary)" }}>💰 {p.name}</p>
+                          <TRow label="Prix de base" value={fmt(p.amount)} muted />
+                          {p.payment_mode !== "comptant" ? (
+                            <>
+                              <TRow label={`Mode de paiement`} value={PAYMENT_MODES.find(m => m.key === p.payment_mode)?.label ?? p.payment_mode} muted />
+                              <TRow label={`${inst.n} mensualités`} value={fmt(inst.monthly) + "/mois"} color="#f59e0b" />
+                              {inst.fees > 0 && <TRow label={`Frais (${p.installment_fees_pct}%)`} value={fmt(inst.fees)} color="var(--danger)" />}
+                              <TDivider />
+                              <TRow label="Coût total" value={fmt(inst.total)} color={inst.fees > 0 ? "var(--danger)" : "var(--text-primary)"} />
+                            </>
+                          ) : (
+                            <TRow label="Paiement" value="Comptant" muted />
+                          )}
+                          <TDivider />
+                          <TRow label="Statut" value={STATUS_CFG[p.status].label} muted />
+                        </div>
+                      }>{fmt(p.amount)}</Tooltip>
                     </p>
                     {p.payment_mode !== "comptant" && (
                       <p className="text-[10px] tabular-nums" style={{ color: "#f59e0b", fontFamily: "var(--font-dm-mono, monospace)" }}>
