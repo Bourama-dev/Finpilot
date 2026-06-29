@@ -75,8 +75,11 @@ export default function TransactionsPage() {
   const [formError, setFormError] = useState<string | null>(null);
   const [typeFilter, setTypeFilter] = useState<"all" | "income" | "expense">("all");
   const [actFilter, setActFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | "realized" | "planned">("all");
   const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
   const { activities } = useActivities();
+
+  const today = new Date().toISOString().slice(0, 10);
 
   async function load() {
     const { data } = await supabase
@@ -94,12 +97,21 @@ export default function TransactionsPage() {
       if (typeFilter !== "all" && t.type !== typeFilter) return false;
       if (actFilter !== "all" && t.activity !== actFilter) return false;
       if (month && !t.date.startsWith(month)) return false;
+      const isPlanned = t.date > today;
+      if (statusFilter === "realized" && isPlanned) return false;
+      if (statusFilter === "planned" && !isPlanned) return false;
       return true;
-    }), [txs, typeFilter, actFilter, month]);
+    }), [txs, typeFilter, actFilter, month, statusFilter, today]);
 
   const counted = filtered.filter(t => !t.excluded_from_totals);
-  const totalIn = counted.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const totalOut = counted.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const realized = counted.filter(t => t.date <= today);
+  const planned  = counted.filter(t => t.date > today);
+
+  const totalIn      = realized.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const totalOut     = realized.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const plannedIn    = planned.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const plannedOut   = planned.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const hasPlanned   = planned.length > 0;
 
   function openNew() {
     setForm(EMPTY);
@@ -180,17 +192,38 @@ export default function TransactionsPage() {
       </div>
 
       {/* Summary cards */}
-      <div className="grid grid-cols-3 gap-3">
-        {[
-          { label: "Revenus", value: totalIn, color: "var(--success)" },
-          { label: "Dépenses", value: totalOut, color: "var(--danger)" },
-          { label: "Solde", value: totalIn - totalOut, color: totalIn >= totalOut ? "var(--success)" : "var(--danger)" },
-        ].map(({ label, value, color }) => (
-          <div key={label} className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
-            <p className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</p>
-            <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color, fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(value)}</p>
+      <div className="space-y-2">
+        {/* Réalisé */}
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { label: "Revenus réalisés", value: totalIn, color: "var(--success)" },
+            { label: "Dépenses réalisées", value: totalOut, color: "var(--danger)" },
+            { label: "Solde réalisé", value: totalIn - totalOut, color: totalIn >= totalOut ? "var(--success)" : "var(--danger)" },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px solid var(--border)" }}>
+              <p className="text-xs" style={{ color: "var(--text-muted)" }}>{label}</p>
+              <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color, fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(value)}</p>
+            </div>
+          ))}
+        </div>
+        {/* Prévisionnel (affiché uniquement si des transactions futures existent dans la sélection) */}
+        {hasPlanned && (
+          <div className="grid grid-cols-3 gap-3">
+            {[
+              { label: "Revenus prévus", value: plannedIn, color: "var(--success)" },
+              { label: "Dépenses prévues", value: plannedOut, color: "var(--danger)" },
+              { label: "Solde prévu", value: plannedIn - plannedOut, color: plannedIn >= plannedOut ? "var(--success)" : "var(--danger)" },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="rounded-xl p-3 sm:p-4 text-center" style={{ backgroundColor: "var(--bg-secondary)", border: "1px dashed var(--border)", opacity: 0.75 }}>
+                <p className="text-xs flex items-center justify-center gap-1" style={{ color: "var(--text-muted)" }}>
+                  <span className="text-[9px] px-1 py-0.5 rounded" style={{ backgroundColor: "color-mix(in srgb, var(--accent) 15%, transparent)", color: "var(--accent)" }}>PRÉVU</span>
+                  {label.replace(" prévu", "").replace(" prévues", "")}
+                </p>
+                <p className="text-base sm:text-lg font-bold tabular-nums mt-1" style={{ color, fontFamily: "var(--font-dm-mono, monospace)" }}>{fmt(value)}</p>
+              </div>
+            ))}
           </div>
-        ))}
+        )}
       </div>
 
       {/* Filters */}
@@ -202,6 +235,19 @@ export default function TransactionsPage() {
             <button key={t} onClick={() => setTypeFilter(t)} className="px-3 py-1.5 text-xs font-medium"
               style={typeFilter === t ? { backgroundColor: "var(--accent)", color: "#fff" } : { backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}>
               {t === "all" ? "Tous" : t === "income" ? "↑ Revenus" : "↓ Dépenses"}
+            </button>
+          ))}
+        </div>
+
+        <div className="flex rounded-lg overflow-hidden" style={{ border: "1px solid var(--border)" }}>
+          {([
+            { key: "all",      label: "Tous" },
+            { key: "realized", label: "✓ Réalisées" },
+            { key: "planned",  label: "📅 Prévues" },
+          ] as const).map(s => (
+            <button key={s.key} onClick={() => setStatusFilter(s.key)} className="px-3 py-1.5 text-xs font-medium"
+              style={statusFilter === s.key ? { backgroundColor: "var(--accent)", color: "#fff" } : { backgroundColor: "var(--bg-secondary)", color: "var(--text-secondary)" }}>
+              {s.label}
             </button>
           ))}
         </div>
@@ -238,16 +284,24 @@ export default function TransactionsPage() {
               const act = actMap[tx.activity];
               const color = act?.color ?? "#888";
               const excluded = tx.excluded_from_totals;
+              const isPlanned = tx.date > today;
               return (
                 <li key={tx.id} className="flex items-center gap-3 px-4 py-3.5 group"
                   style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined, opacity: excluded ? 0.5 : 1 }}>
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0" style={{ backgroundColor: `${color}1a` }}>
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0 relative"
+                    style={{ backgroundColor: `${color}${isPlanned ? "10" : "1a"}`, border: isPlanned ? `1px dashed ${color}66` : undefined }}>
                     {act?.emoji ?? "💶"}
+                    {isPlanned && (
+                      <span className="absolute -top-1 -right-1 text-[8px] leading-none px-1 py-0.5 rounded-full font-bold text-white" style={{ backgroundColor: "var(--accent)" }}>!</span>
+                    )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
+                    <p className="text-sm font-medium truncate flex items-center gap-1.5" style={{ color: isPlanned ? "var(--text-secondary)" : "var(--text-primary)" }}>
                       {tx.description ?? tx.category}
-                      {excluded && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>exclu</span>}
+                      {isPlanned && (
+                        <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0" style={{ backgroundColor: "color-mix(in srgb, var(--accent) 12%, transparent)", color: "var(--accent)" }}>📅 Prévu</span>
+                      )}
+                      {excluded && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>exclu</span>}
                     </p>
                     <p className="text-xs mt-0.5 flex items-center gap-1.5 flex-wrap" style={{ color: "var(--text-muted)" }}>
                       {act?.label ?? tx.activity} · {tx.category} · {new Date(tx.date).toLocaleDateString("fr-FR")}
@@ -259,7 +313,12 @@ export default function TransactionsPage() {
                     </p>
                   </div>
                   <p className="text-sm font-bold tabular-nums shrink-0"
-                    style={{ color: excluded ? "var(--text-muted)" : tx.type === "income" ? "var(--success)" : "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)", textDecoration: excluded ? "line-through" : undefined }}>
+                    style={{
+                      color: excluded ? "var(--text-muted)" : isPlanned ? `${tx.type === "income" ? "var(--success)" : "var(--danger)"}99` : tx.type === "income" ? "var(--success)" : "var(--danger)",
+                      fontFamily: "var(--font-dm-mono, monospace)",
+                      textDecoration: excluded ? "line-through" : isPlanned ? "none" : undefined,
+                      fontStyle: isPlanned ? "italic" : undefined,
+                    }}>
                     {tx.type === "income" ? "+" : "−"}{fmt(tx.amount)}
                   </p>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
