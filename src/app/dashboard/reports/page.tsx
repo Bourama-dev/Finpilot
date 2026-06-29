@@ -48,6 +48,7 @@ export default function ReportsPage() {
         supabase
           .from("transactions")
           .select("id, activity, type, amount, category, date")
+          .eq("excluded_from_totals", false)
           .gte("date", `${year}-01-01`)
           .lte("date", `${year}-12-31`)
           .order("date", { ascending: true }),

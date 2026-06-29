@@ -105,11 +105,13 @@ export default function ForecastPage() {
         supabase
           .from("transactions")
           .select("id, type, amount, category, description, activity, date, recurring_frequency")
-          .eq("is_recurring", true),
+          .eq("is_recurring", true)
+          .eq("excluded_from_totals", false),
         supabase
           .from("transactions")
           .select("type, amount, date, activity, category")
           .eq("is_recurring", false)
+          .eq("excluded_from_totals", false)
           .gte("date", threeMonthsAgo.toISOString().slice(0, 10)),
         supabase
           .from("receivables")

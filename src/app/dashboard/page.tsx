@@ -109,6 +109,7 @@ export default function DashboardPage() {
       const { data } = await supabase
         .from("transactions")
         .select("id, description, amount, type, activity, date, category")
+        .eq("excluded_from_totals", false)
         .order("date", { ascending: false })
         .limit(20);
 

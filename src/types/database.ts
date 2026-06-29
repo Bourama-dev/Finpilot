@@ -28,6 +28,7 @@ type TransactionRow = {
   recurring_frequency: "daily" | "weekly" | "monthly" | "yearly" | null;
   tags: string[] | null;
   notes: string | null;
+  excluded_from_totals: boolean;
   created_at: string;
   updated_at: string;
 };
@@ -141,13 +142,14 @@ export type Database = {
       };
       transactions: {
         Row: TransactionRow;
-        Insert: Omit<TransactionRow, "id" | "created_at" | "updated_at" | "description" | "document_id" | "is_recurring" | "recurring_frequency" | "tags" | "notes"> & {
+        Insert: Omit<TransactionRow, "id" | "created_at" | "updated_at" | "description" | "document_id" | "is_recurring" | "recurring_frequency" | "tags" | "notes" | "excluded_from_totals"> & {
           description?: string | null;
           document_id?: string | null;
           is_recurring?: boolean;
           recurring_frequency?: "daily" | "weekly" | "monthly" | "yearly" | null;
           tags?: string[] | null;
           notes?: string | null;
+          excluded_from_totals?: boolean;
         };
         Update: Partial<Omit<TransactionRow, "id" | "user_id" | "created_at" | "updated_at">>;
         Relationships: [

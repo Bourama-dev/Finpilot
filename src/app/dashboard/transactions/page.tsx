@@ -31,6 +31,7 @@ type TX = {
   date: string;
   is_recurring: boolean;
   recurring_frequency: Frequency | null;
+  excluded_from_totals: boolean;
 };
 
 type FormState = {
@@ -80,7 +81,7 @@ export default function TransactionsPage() {
   async function load() {
     const { data } = await supabase
       .from("transactions")
-      .select("id, activity, type, amount, currency, category, description, date, is_recurring, recurring_frequency")
+      .select("id, activity, type, amount, currency, category, description, date, is_recurring, recurring_frequency, excluded_from_totals")
       .order("date", { ascending: false });
     if (data) setTxs(data as TX[]);
     setLoading(false);
@@ -96,8 +97,9 @@ export default function TransactionsPage() {
       return true;
     }), [txs, typeFilter, actFilter, month]);
 
-  const totalIn = filtered.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
-  const totalOut = filtered.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
+  const counted = filtered.filter(t => !t.excluded_from_totals);
+  const totalIn = counted.filter(t => t.type === "income").reduce((s, t) => s + t.amount, 0);
+  const totalOut = counted.filter(t => t.type === "expense").reduce((s, t) => s + t.amount, 0);
 
   function openNew() {
     setForm(EMPTY);
@@ -157,6 +159,12 @@ export default function TransactionsPage() {
     if (!confirm("Supprimer cette transaction ?")) return;
     await supabase.from("transactions").delete().eq("id", id);
     setTxs(prev => prev.filter(t => t.id !== id));
+  }
+
+  async function toggleExcluded(tx: TX) {
+    const next = !tx.excluded_from_totals;
+    await supabase.from("transactions").update({ excluded_from_totals: next }).eq("id", tx.id);
+    setTxs(prev => prev.map(t => t.id === tx.id ? { ...t, excluded_from_totals: next } : t));
   }
 
   const actMap = Object.fromEntries(activities.map(a => [a.key, a]));
@@ -229,15 +237,17 @@ export default function TransactionsPage() {
             {filtered.map((tx, i) => {
               const act = actMap[tx.activity];
               const color = act?.color ?? "#888";
+              const excluded = tx.excluded_from_totals;
               return (
                 <li key={tx.id} className="flex items-center gap-3 px-4 py-3.5 group"
-                  style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined }}>
+                  style={{ borderTop: i > 0 ? "1px solid var(--border)" : undefined, opacity: excluded ? 0.5 : 1 }}>
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center text-base shrink-0" style={{ backgroundColor: `${color}1a` }}>
                     {act?.emoji ?? "💶"}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate" style={{ color: "var(--text-primary)" }}>
                       {tx.description ?? tx.category}
+                      {excluded && <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ backgroundColor: "var(--bg-tertiary)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>exclu</span>}
                     </p>
                     <p className="text-xs mt-0.5 flex items-center gap-1.5 flex-wrap" style={{ color: "var(--text-muted)" }}>
                       {act?.label ?? tx.activity} · {tx.category} · {new Date(tx.date).toLocaleDateString("fr-FR")}
@@ -249,10 +259,16 @@ export default function TransactionsPage() {
                     </p>
                   </div>
                   <p className="text-sm font-bold tabular-nums shrink-0"
-                    style={{ color: tx.type === "income" ? "var(--success)" : "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)" }}>
+                    style={{ color: excluded ? "var(--text-muted)" : tx.type === "income" ? "var(--success)" : "var(--danger)", fontFamily: "var(--font-dm-mono, monospace)", textDecoration: excluded ? "line-through" : undefined }}>
                     {tx.type === "income" ? "+" : "−"}{fmt(tx.amount)}
                   </p>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                    <button onClick={() => toggleExcluded(tx)}
+                      title={excluded ? "Inclure dans les totaux" : "Exclure des totaux"}
+                      className="p-1.5 rounded-lg hover:opacity-70 transition-opacity text-xs"
+                      style={{ color: excluded ? "var(--accent)" : "var(--text-muted)", backgroundColor: excluded ? "color-mix(in srgb, var(--accent) 10%, transparent)" : undefined }}>
+                      {excluded ? "✓" : "⊘"}
+                    </button>
                     <button onClick={() => openEdit(tx)} className="p-1.5 rounded-lg hover:opacity-70" style={{ color: "var(--text-muted)" }}>✏️</button>
                     <button onClick={() => handleDelete(tx.id)} className="p-1.5 rounded-lg hover:opacity-70" style={{ color: "var(--danger)" }}>🗑</button>
                   </div>

@@ -56,6 +56,7 @@ export default function BudgetsPage() {
       supabase.from("transactions")
         .select("amount, activity, category, type, date")
         .eq("type", "expense")
+        .eq("excluded_from_totals", false)
         .gte("date", `${currentYear}-${String(currentMonth).padStart(2, "0")}-01`),
     ]);
     if (bData) setBudgets(bData as Budget[]);
