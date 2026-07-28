@@ -2,7 +2,18 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { CircleUserRound, Menu, X } from "lucide-react";
+import {
+  CircleUserRound,
+  Menu,
+  X,
+  Wallet,
+  LineChart,
+  ShieldCheck,
+  GraduationCap,
+  Building2,
+  Bot,
+  Home,
+} from "lucide-react";
 
 const AVATAR_URLS = [
   "https://images.pexels.com/photos/774909/pexels-photo-774909.jpeg?auto=compress&cs=tinysrgb&w=100",
@@ -63,11 +74,60 @@ function CheckerGridIcon() {
   );
 }
 
+const APPROACH_STEPS = [
+  {
+    icon: Wallet,
+    title: "Centralisez",
+    description:
+      "Regroupez Alternance, CléAvenir, Hakily et vos finances personnelles dans un seul tableau de bord.",
+  },
+  {
+    icon: LineChart,
+    title: "Analysez",
+    description:
+      "Visualisez vos flux, vos budgets et vos prévisions grâce à des indicateurs clairs et actualisés.",
+  },
+  {
+    icon: ShieldCheck,
+    title: "Optimisez",
+    description:
+      "Recevez des recommandations personnalisées pour reprendre le contrôle de votre argent en toute sérénité.",
+  },
+];
+
+const SOLUTIONS = [
+  {
+    icon: GraduationCap,
+    title: "Alternance",
+    description: "Suivez votre rémunération et vos dépenses liées à votre alternance.",
+    color: "#6366f1",
+  },
+  {
+    icon: Building2,
+    title: "CléAvenir",
+    description: "Pilotez votre épargne et vos investissements CléAvenir en un coup d'œil.",
+    color: "#f59e0b",
+  },
+  {
+    icon: Bot,
+    title: "Hakily",
+    description: "Laissez l'IA analyser vos habitudes et automatiser vos recommandations.",
+    color: "#10b981",
+  },
+  {
+    icon: Home,
+    title: "Personnel",
+    description: "Gérez votre budget, vos factures et votre trésorerie personnelle.",
+    color: "#ec4899",
+  },
+];
+
 export default function HomePage() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <main className="relative h-screen w-full overflow-hidden bg-black">
+    <main className="relative w-full bg-black">
+    <section className="relative h-screen w-full overflow-hidden">
       <video
         className="absolute inset-0 h-full w-full object-cover"
         src="https://d8j0ntlcm91z4.cloudfront.net/user_38xzZboKViGWJOttwIXH07lWA1P/hf_20260715_082433_69699cf8-444b-4484-93cc-053e57896dfd.mp4"
@@ -217,6 +277,77 @@ export default function HomePage() {
           </div>
         </div>
       </div>
+    </section>
+
+      {/* Notre Approche */}
+      <section id="approche" className="relative px-5 py-20 sm:px-8 sm:py-28 md:px-16 lg:px-20">
+        <div className="mx-auto max-w-5xl">
+          <span className="text-xs font-medium uppercase tracking-widest text-white/50 sm:text-sm">
+            Notre Approche
+          </span>
+          <h2
+            className="mt-3 text-3xl font-normal leading-[1.1] text-white sm:text-4xl md:text-5xl"
+            style={{ letterSpacing: "-0.03em" }}
+          >
+            Une méthode simple pour reprendre le contrôle
+          </h2>
+          <p className="mt-4 max-w-2xl text-sm font-light text-white/70 sm:text-base md:text-lg">
+            FinPilot centralise, analyse et optimise vos finances en trois étapes claires,
+            pensées pour vous faire gagner du temps et de la sérénité.
+          </p>
+
+          <div className="mt-12 grid grid-cols-1 gap-6 sm:mt-16 sm:grid-cols-3">
+            {APPROACH_STEPS.map((step) => (
+              <div key={step.title} className="section-glass rounded-2xl p-6">
+                <step.icon className="h-6 w-6 text-white/80" strokeWidth={1.5} />
+                <h3 className="mt-4 text-lg font-medium text-white sm:text-xl">{step.title}</h3>
+                <p className="mt-2 text-sm font-light text-white/60">{step.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Nos Solutions */}
+      <section id="solutions" className="relative px-5 py-20 sm:px-8 sm:py-28 md:px-16 lg:px-20">
+        <div className="mx-auto max-w-5xl">
+          <span className="text-xs font-medium uppercase tracking-widest text-white/50 sm:text-sm">
+            Nos Solutions
+          </span>
+          <h2
+            className="mt-3 text-3xl font-normal leading-[1.1] text-white sm:text-4xl md:text-5xl"
+            style={{ letterSpacing: "-0.03em" }}
+          >
+            Quatre univers, un seul tableau de bord
+          </h2>
+          <p className="mt-4 max-w-2xl text-sm font-light text-white/70 sm:text-base md:text-lg">
+            Que vous soyez en alternance, épargnant, accompagné par notre IA ou simplement en quête
+            de clarté sur vos finances personnelles, FinPilot s'adapte à votre quotidien.
+          </p>
+
+          <div className="mt-12 grid grid-cols-1 gap-6 sm:mt-16 sm:grid-cols-2">
+            {SOLUTIONS.map((solution) => (
+              <div key={solution.title} className="section-glass rounded-2xl p-6">
+                <div
+                  className="flex h-11 w-11 items-center justify-center rounded-xl"
+                  style={{ backgroundColor: `${solution.color}26` }}
+                >
+                  <solution.icon className="h-5 w-5" style={{ color: solution.color }} strokeWidth={1.5} />
+                </div>
+                <h3 className="mt-4 text-lg font-medium text-white sm:text-xl">{solution.title}</h3>
+                <p className="mt-2 text-sm font-light text-white/60">{solution.description}</p>
+              </div>
+            ))}
+          </div>
+
+          <Link
+            href="/auth/register"
+            className="liquid-glass mt-12 inline-block rounded-full px-6 py-3 text-sm font-medium text-white transition duration-300 hover:bg-white/10 sm:mt-16 sm:px-7 sm:py-3.5"
+          >
+            Commencez Votre Parcours
+          </Link>
+        </div>
+      </section>
     </main>
   );
 }
