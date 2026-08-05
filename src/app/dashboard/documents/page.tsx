@@ -5,12 +5,8 @@ export const dynamic = "force-dynamic";
 import { useState, useEffect, useRef } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useActivities, getActivity } from "@/hooks/useActivities";
-
-const CATEGORY_SUGGESTIONS = [
-  "Loyer", "Courses", "Transport", "Abonnements", "Restaurant", "Santé",
-  "Logiciels", "Marketing", "Formation", "Matériel", "Comptabilité",
-  "Salaire", "Freelance", "Remboursement", "Prime",
-];
+import StatementImport from "./StatementImport";
+import { CATEGORY_SUGGESTIONS } from "./constants";
 
 type Doc = {
   id: string;
@@ -320,6 +316,9 @@ export default function DocumentsPage() {
           </div>
         )}
       </div>
+
+      {/* Bank statement AI importer */}
+      <StatementImport activities={activities} />
 
       {/* Upload zone */}
       <div
