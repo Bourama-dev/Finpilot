@@ -129,7 +129,68 @@ type PurchaseRow = {
   updated_at: string;
 };
 
-export type { ProfileRow, TransactionRow, CategoryRow, DocumentRow, BudgetRow, GoalRow, ReceivableRow, PurchaseRow, UserActivityRow };
+type BudgetLineSection = "revenue" | "fixed_charge";
+
+type BudgetLineRow = {
+  id: string;
+  user_id: string;
+  section: BudgetLineSection;
+  label: string;
+  position: number;
+  created_at: string;
+};
+
+type BudgetLineValueRow = {
+  id: string;
+  user_id: string;
+  line_id: string;
+  month: string;
+  amount: number;
+  created_at: string;
+};
+
+type BudgetMonthlySettingRow = {
+  id: string;
+  user_id: string;
+  month: string;
+  safety_margin_target: number;
+  created_at: string;
+};
+
+type BudgetCreditRow = {
+  id: string;
+  user_id: string;
+  name: string;
+  taeg: number | null;
+  starting_balance: number;
+  start_month: string;
+  position: number;
+  created_at: string;
+};
+
+type BudgetCreditRepaymentRow = {
+  id: string;
+  user_id: string;
+  credit_id: string;
+  month: string;
+  amount: number;
+  created_at: string;
+};
+
+type BudgetExceptionalExpenseRow = {
+  id: string;
+  user_id: string;
+  expense_date: string;
+  description: string;
+  amount: number;
+  notes: string | null;
+  created_at: string;
+};
+
+export type {
+  ProfileRow, TransactionRow, CategoryRow, DocumentRow, BudgetRow, GoalRow, ReceivableRow, PurchaseRow, UserActivityRow,
+  BudgetLineSection, BudgetLineRow, BudgetLineValueRow, BudgetMonthlySettingRow, BudgetCreditRow, BudgetCreditRepaymentRow, BudgetExceptionalExpenseRow,
+};
 
 export type Database = {
   public: {
@@ -220,6 +281,56 @@ export type Database = {
         Update: Partial<Omit<UserActivityRow, "id" | "user_id" | "created_at">>;
         Relationships: [
           { foreignKeyName: "user_activities_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
+        ];
+      };
+      budget_lines: {
+        Row: BudgetLineRow;
+        Insert: Omit<BudgetLineRow, "id" | "created_at">;
+        Update: Partial<Omit<BudgetLineRow, "id" | "user_id" | "created_at">>;
+        Relationships: [
+          { foreignKeyName: "budget_lines_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
+        ];
+      };
+      budget_line_values: {
+        Row: BudgetLineValueRow;
+        Insert: Omit<BudgetLineValueRow, "id" | "created_at">;
+        Update: Partial<Omit<BudgetLineValueRow, "id" | "user_id" | "created_at">>;
+        Relationships: [
+          { foreignKeyName: "budget_line_values_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "budget_line_values_line_id_fkey"; columns: ["line_id"]; isOneToOne: false; referencedRelation: "budget_lines"; referencedColumns: ["id"] }
+        ];
+      };
+      budget_monthly_settings: {
+        Row: BudgetMonthlySettingRow;
+        Insert: Omit<BudgetMonthlySettingRow, "id" | "created_at">;
+        Update: Partial<Omit<BudgetMonthlySettingRow, "id" | "user_id" | "created_at">>;
+        Relationships: [
+          { foreignKeyName: "budget_monthly_settings_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
+        ];
+      };
+      budget_credits: {
+        Row: BudgetCreditRow;
+        Insert: Omit<BudgetCreditRow, "id" | "created_at">;
+        Update: Partial<Omit<BudgetCreditRow, "id" | "user_id" | "created_at">>;
+        Relationships: [
+          { foreignKeyName: "budget_credits_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
+        ];
+      };
+      budget_credit_repayments: {
+        Row: BudgetCreditRepaymentRow;
+        Insert: Omit<BudgetCreditRepaymentRow, "id" | "created_at">;
+        Update: Partial<Omit<BudgetCreditRepaymentRow, "id" | "user_id" | "created_at">>;
+        Relationships: [
+          { foreignKeyName: "budget_credit_repayments_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] },
+          { foreignKeyName: "budget_credit_repayments_credit_id_fkey"; columns: ["credit_id"]; isOneToOne: false; referencedRelation: "budget_credits"; referencedColumns: ["id"] }
+        ];
+      };
+      budget_exceptional_expenses: {
+        Row: BudgetExceptionalExpenseRow;
+        Insert: Omit<BudgetExceptionalExpenseRow, "id" | "created_at">;
+        Update: Partial<Omit<BudgetExceptionalExpenseRow, "id" | "user_id" | "created_at">>;
+        Relationships: [
+          { foreignKeyName: "budget_exceptional_expenses_user_id_fkey"; columns: ["user_id"]; isOneToOne: false; referencedRelation: "profiles"; referencedColumns: ["id"] }
         ];
       };
     };
