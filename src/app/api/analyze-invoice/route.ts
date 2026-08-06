@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+import OpenAI from "openai";
 
 const SYSTEM_PROMPT = `Tu es un assistant spécialisé dans l'extraction de données de factures et reçus financiers.
 Analyse le document fourni et extrait les informations financières.
@@ -26,13 +24,15 @@ Si c'est un reçu de paiement entrant, virement reçu, facture émise → type =
 Si le montant est ambigu, utilise le montant TTC total.`;
 
 export async function POST(req: NextRequest) {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return NextResponse.json(
-      { error: "ANTHROPIC_API_KEY non configurée. Ajoutez-la dans votre fichier .env.local." },
+      { error: "OPENAI_API_KEY non configurée. Ajoutez-la dans votre fichier .env.local." },
       { status: 503 }
     );
   }
+
+  const client = new OpenAI({ apiKey });
 
   try {
     const formData = await req.formData();
@@ -55,44 +55,32 @@ export async function POST(req: NextRequest) {
     const buffer = await file.arrayBuffer();
     const base64 = Buffer.from(buffer).toString("base64");
 
-    type ContentBlock =
-      | { type: "text"; text: string }
-      | { type: "image"; source: { type: "base64"; media_type: string; data: string } }
-      | { type: "document"; source: { type: "base64"; media_type: "application/pdf"; data: string } };
-
-    const content: ContentBlock[] = [];
-
-    if (isPDF) {
-      content.push({
-        type: "document",
-        source: { type: "base64", media_type: "application/pdf", data: base64 },
-      });
-    } else {
-      const mediaType = file.type as "image/jpeg" | "image/png" | "image/gif" | "image/webp";
-      content.push({
-        type: "image",
-        source: { type: "base64", media_type: mediaType, data: base64 },
-      });
-    }
-
-    content.push({ type: "text", text: USER_PROMPT });
-
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const message = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 512,
-      system: SYSTEM_PROMPT,
-      messages: [{ role: "user", content: content as any }],
+    const contentPart: any = isPDF
+      ? { type: "input_file", filename: file.name || "document.pdf", file_data: `data:application/pdf;base64,${base64}` }
+      : { type: "input_image", image_url: `data:${file.type};base64,${base64}` };
+
+    const response = await client.responses.create({
+      model: "gpt-4o",
+      instructions: SYSTEM_PROMPT,
+      input: [
+        {
+          role: "user",
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          content: [{ type: "input_text", text: USER_PROMPT }, contentPart] as any,
+        },
+      ],
+      text: { format: { type: "json_object" } },
     });
 
-    const raw = message.content[0].type === "text" ? message.content[0].text.trim() : "";
+    const raw = response.output_text.trim();
 
     let parsed: Record<string, unknown>;
     try {
       parsed = JSON.parse(raw);
     } catch {
       const match = raw.match(/\{[\s\S]*\}/);
-      if (!match) throw new Error("Réponse non structurée de Claude");
+      if (!match) throw new Error("Réponse non structurée du modèle");
       parsed = JSON.parse(match[0]);
     }
 
