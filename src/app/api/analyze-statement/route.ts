@@ -1,27 +1,34 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-const SYSTEM_PROMPT = `Tu es un assistant spécialisé dans l'extraction de données de factures et reçus financiers.
-Analyse le document fourni et extrait les informations financières.
-Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans commentaires.`;
+const SYSTEM_PROMPT = `Tu es un assistant spécialisé dans l'extraction de données de relevés bancaires.
+Analyse le document fourni (relevé de compte bancaire) et extrait TOUTES les opérations qui y figurent.
+Réponds UNIQUEMENT avec un objet JSON valide, sans markdown, sans commentaires, sans texte avant ou après.`;
 
-const USER_PROMPT = `Analyse cette facture/reçu et extrait les données financières.
+const USER_PROMPT = `Analyse ce relevé bancaire et extrait chaque opération (ligne de mouvement) qu'il contient.
 
-Retourne un objet JSON avec exactement ces champs :
+Ignore les lignes qui ne sont pas des opérations (solde précédent, solde nouveau, totaux, en-têtes, numéro de compte...).
+
+Retourne un objet JSON avec exactement ce format :
 {
-  "type": "income" ou "expense",
-  "amount": nombre positif (montant TTC en EUR),
-  "currency": "EUR" ou autre devise si visible,
-  "category": catégorie courte (ex: "Loyer", "Courses", "Logiciels", "Transport", "Salaire", "Freelance"...),
-  "description": description brève (fournisseur + objet),
-  "date": "YYYY-MM-DD" (date de la facture, ou null si non visible),
-  "is_recurring": false,
-  "confidence": "high" | "medium" | "low"
+  "transactions": [
+    {
+      "type": "income" ou "expense",
+      "amount": nombre positif (valeur absolue du montant en EUR),
+      "category": catégorie courte en français (ex: "Loyer", "Courses", "Transport", "Abonnements", "Restaurant", "Santé", "Salaire", "Virement", "Autre"...),
+      "description": libellé de l'opération, nettoyé et raccourci (commerçant / origine),
+      "date": "YYYY-MM-DD"
+    }
+  ]
 }
 
-Si le document est une facture de dépense (achat, abonnement, prestation reçue) → type = "expense".
-Si c'est un reçu de paiement entrant, virement reçu, facture émise → type = "income".
-Si le montant est ambigu, utilise le montant TTC total.`;
+Règles :
+- Un débit / retrait / paiement / prélèvement → "type": "expense".
+- Un crédit / virement reçu / salaire / remboursement → "type": "income".
+- "amount" est toujours positif, quel que soit le type.
+- Si une date n'a pas d'année visible, déduis-la du contexte du relevé (période du relevé).
+- Choisis une catégorie cohérente et réutilise la même catégorie pour des opérations similaires.
+- N'invente aucune opération : n'extrait que ce qui est réellement visible sur le document.`;
 
 export async function POST(req: NextRequest) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -57,7 +64,7 @@ export async function POST(req: NextRequest) {
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const contentPart: any = isPDF
-      ? { type: "input_file", filename: file.name || "document.pdf", file_data: `data:application/pdf;base64,${base64}` }
+      ? { type: "input_file", filename: file.name || "releve.pdf", file_data: `data:application/pdf;base64,${base64}` }
       : { type: "input_image", image_url: `data:${file.type};base64,${base64}` };
 
     const response = await client.responses.create({
@@ -71,11 +78,12 @@ export async function POST(req: NextRequest) {
         },
       ],
       text: { format: { type: "json_object" } },
+      max_output_tokens: 8000,
     });
 
     const raw = response.output_text.trim();
 
-    let parsed: Record<string, unknown>;
+    let parsed: { transactions?: unknown[] };
     try {
       parsed = JSON.parse(raw);
     } catch {
@@ -84,7 +92,8 @@ export async function POST(req: NextRequest) {
       parsed = JSON.parse(match[0]);
     }
 
-    return NextResponse.json({ ok: true, data: parsed });
+    const transactions = Array.isArray(parsed.transactions) ? parsed.transactions : [];
+    return NextResponse.json({ ok: true, data: transactions });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Erreur lors de l'analyse";
     return NextResponse.json({ error: msg }, { status: 500 });
